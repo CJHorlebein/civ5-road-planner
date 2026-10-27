@@ -371,9 +371,9 @@ function steinerExact(G, terms) {
 }
 
 // Cheapest growth from the current network, where existing tiles are free.
-function growFrom(G, inNet) {
+function growFrom(G, inNet, sources = inNet) {
   const dist = new Int32Array(G.n).fill(1e9), prev = new Int32Array(G.n).fill(-1), buckets = [[]];
-  for (let v = 0; v < G.n; v++) if (inNet[v]) { dist[v] = 0; buckets[0].push(v); }
+  for (let v = 0; v < G.n; v++) if (sources[v]) { dist[v] = 0; buckets[0].push(v); }
   for (let c = 0; c < buckets.length; c++) {
     const L = buckets[c];
     if (!L) continue;
@@ -400,6 +400,87 @@ function pruneLeaves(G, inNet, isTerm) {
       if (deg <= 1) { inNet[v] = 0; changed = true; }
     }
   }
+}
+
+// Runs of road tiles between two cities or junctions.
+function roadSegments(G, inNet, isTerm) {
+  const deg = v => G.adj[v].reduce((d, u) => d + inNet[u], 0);
+  const isKey = v => isTerm[v] || deg(v) !== 2;
+  const seen = new Uint8Array(G.n), out = [];
+  for (let k = 0; k < G.n; k++) {
+    if (!inNet[k] || !isKey(k)) continue;
+    for (const first of G.adj[k]) {
+      if (!inNet[first] || seen[first] || isKey(first)) continue;
+      const seg = [];
+      let prev = k, cur = first;
+      while (cur >= 0 && !isKey(cur) && !seen[cur]) {
+        seg.push(cur); seen[cur] = 1;
+        const next = G.adj[cur].find(u => inNet[u] && u !== prev && !seen[u]);
+        prev = cur; cur = next === undefined ? -1 : next;
+      }
+      out.push(seg);
+    }
+  }
+  return out;
+}
+
+// Every cheapest way to rejoin network parts a and b, up to cap routes.
+function bridgeRoutes(G, inNet, b, A, B, bridge, cap) {
+  const cost = v => (inNet[v] ? 0 : G.w[v]), out = [], path = [];
+  const walk = x => {
+    if (out.length >= cap) return;
+    if (b[x]) { out.push(path.slice()); return; }
+    if (inNet[x]) return;
+    path.push(x);
+    for (const y of G.adj[x]) if (B.dist[y] === B.dist[x] - cost(x) && A.dist[y] === A.dist[x] + cost(y)) walk(y);
+    path.pop();
+  };
+  for (let x = 0; x < G.n; x++) if (!inNet[x] && A.dist[x] === 1 && A.dist[x] + B.dist[x] - 1 === bridge) walk(x);
+  return out;
+}
+
+// Same tile count, shorter trips: lift each road segment and re-lay it
+// along whichever equally cheap route gives the lowest total travel.
+function improveLayout(G, terms, inNet, budgetMs = 600) {
+  const isTerm = new Uint8Array(G.n);
+  for (const t of terms) isTerm[t] = 1;
+  const start = Date.now();
+  let cur = evalNet(G, terms, inNet), tiles = countTiles(G, inNet);
+  for (let round = 0; round < 60 && Date.now() - start < budgetMs; round++) {
+    let improved = false;
+    for (const seg of roadSegments(G, inNet, isTerm)) {
+      for (const v of seg) inNet[v] = 0;
+      const reach = bfs(G, terms[0], inNet);
+      if (!terms.every(t => reach[t] >= 0)) {
+        const a = new Uint8Array(G.n), b = new Uint8Array(G.n);
+        for (let v = 0; v < G.n; v++) if (inNet[v]) (reach[v] >= 0 ? a : b)[v] = 1;
+        const A = growFrom(G, inNet, a), B = growFrom(G, inNet, b);
+        let bridge = Infinity;
+        for (let v = 0; v < G.n; v++) if (b[v]) bridge = Math.min(bridge, A.dist[v]);
+        let best = null;
+        if (bridge <= seg.length) {
+          for (const route of bridgeRoutes(G, inNet, b, A, B, bridge, 300)) {
+            for (const v of route) inNet[v] = 1;
+            const e = evalNet(G, terms, inNet), t = countTiles(G, inNet);
+            for (const v of route) inNet[v] = 0;
+            if (!e.ok) continue;
+            const ref = best || { t: tiles, e: cur };
+            if (t < ref.t || (t === ref.t && e.sum < ref.e.sum)) best = { route, t, e };
+          }
+        }
+        if (best) {
+          for (const v of best.route) inNet[v] = 1;
+          pruneLeaves(G, inNet, isTerm);
+          cur = evalNet(G, terms, inNet); tiles = countTiles(G, inNet);
+          improved = true;
+          break;
+        }
+      }
+      for (const v of seg) inNet[v] = 1;
+    }
+    if (!improved) break;
+  }
+  return inNet;
 }
 
 // Shortest-path heuristic for maps with too many cities to solve exactly.
@@ -549,7 +630,7 @@ function solve(cols, rows, cells, cityCells, thr) {
   for (let i = 0; i < k; i++) for (let j = i + 1; j < k; j++) idealSum += ideal[i][j];
 
   const exact = k <= EXACT_LIMIT;
-  const fewestNet = exact ? steinerExact(G, terms) : steinerHeuristic(G, terms);
+  const fewestNet = improveLayout(G, terms, exact ? steinerExact(G, terms) : steinerHeuristic(G, terms));
   const fastestNet = buildFastest(G, terms, ideal, idealSum, fewestNet);
   const balancedNet = buildBalanced(G, terms, ideal, fewestNet, thr);
   const mk = net => ({ inNet: net, tiles: countTiles(G, net), ...evalNet(G, terms, net), note: "" });

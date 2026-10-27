@@ -15,7 +15,7 @@ Open `index.html` in a browser. There is no build step and nothing to install.
 
 | Plan | What it does |
 |---|---|
-| Fewest roads | Minimum Steiner tree connecting every city. Exact (Dreyfus–Wagner) for up to 12 cities, approximate above that. |
+| Fewest roads | Minimum Steiner tree connecting every city. Exact (Dreyfus–Wagner) for up to 12 cities, approximate above that. Among equally small networks, road segments are re-laid to shorten trips. |
 | Fastest travel | Every pair of cities gets its shortest land route, overlapping where possible, then unneeded tiles are pruned. |
 | Balanced | Starts from Fewest roads and greedily adds shortcuts. A shortcut is built only if it saves enough total travel per new tile (set by the slider) and cuts at least one trip by 2 or more tiles. |
 
