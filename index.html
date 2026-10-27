@@ -316,9 +316,40 @@ function countTiles(G, inNet) {
   return c;
 }
 
-// Exact node-weighted Steiner tree (Dreyfus–Wagner).
+class MinHeap {
+  constructor() { this.k = []; this.v = []; }
+  get size() { return this.k.length; }
+  push(key, val) {
+    const hk = this.k, hv = this.v;
+    let i = hk.length; hk.push(key); hv.push(val);
+    while (i > 0) { const p = (i - 1) >> 1; if (hk[p] <= key) break; hk[i] = hk[p]; hv[i] = hv[p]; i = p; }
+    hk[i] = key; hv[i] = val;
+  }
+  pop() {
+    const hk = this.k, hv = this.v, key = hk[0], val = hv[0], lk = hk.pop(), lv = hv.pop(), m = hk.length;
+    if (m) {
+      let i = 0;
+      for (;;) {
+        let c = 2 * i + 1;
+        if (c >= m) break;
+        if (c + 1 < m && hk[c + 1] < hk[c]) c++;
+        if (hk[c] >= lk) break;
+        hk[i] = hk[c]; hv[i] = hv[c]; i = c;
+      }
+      hk[i] = lk; hv[i] = lv;
+    }
+    this.lastKey = key;
+    return val;
+  }
+}
+
+// Exact node-weighted Steiner tree (Dreyfus–Wagner). Cost is road tiles
+// first, then total travel as the tie-break: a tree edge that separates
+// |S| cities from the other k-|S| lies on |S|·(k-|S|) city-to-city trips.
+const TILE = 1e6;
 function steinerExact(G, terms) {
   const { n, adj, w } = G, k = terms.length, M = 1 << k, full = M - 1;
+  const popcount = x => { let c = 0; while (x) { x &= x - 1; c++; } return c; };
   const dp = new Float64Array(M * n).fill(Infinity);
   const split = new Int32Array(M * n).fill(-1);
   const prev = new Int32Array(M * n).fill(-1);
@@ -326,37 +357,26 @@ function steinerExact(G, terms) {
     const b = S * n;
     if ((S & (S - 1)) === 0) {
       const t = terms[31 - Math.clz32(S)];
-      dp[b + t] = w[t];
+      dp[b + t] = TILE * w[t];
     } else {
       const low = S & -S;
       for (let sub = (S - 1) & S; sub > 0; sub = (sub - 1) & S) {
         if (!(sub & low)) continue;
         const b1 = sub * n, b2 = (S ^ sub) * n;
         for (let v = 0; v < n; v++) {
-          const val = dp[b1 + v] + dp[b2 + v] - w[v];
+          const val = dp[b1 + v] + dp[b2 + v] - TILE * w[v];
           if (val < dp[b + v]) { dp[b + v] = val; split[b + v] = sub; }
         }
       }
     }
-    // Spread outward with a bucket queue (edge costs are 0 or 1).
-    const buckets = [];
-    for (let v = 0; v < n; v++) {
-      const d = dp[b + v];
-      if (d < Infinity) (buckets[d] || (buckets[d] = [])).push(v);
-    }
-    for (let c = 0; c < buckets.length; c++) {
-      const L = buckets[c];
-      if (!L) continue;
-      for (let i = 0; i < L.length; i++) {
-        const v = L[i];
-        if (dp[b + v] !== c) continue;
-        for (const u of adj[v]) {
-          const nd = c + w[u];
-          if (nd < dp[b + u]) {
-            dp[b + u] = nd; split[b + u] = -1; prev[b + u] = v;
-            (buckets[nd] || (buckets[nd] = [])).push(u);
-          }
-        }
+    const pc = popcount(S), trips = pc * (k - pc), heap = new MinHeap();
+    for (let v = 0; v < n; v++) if (dp[b + v] < Infinity) heap.push(dp[b + v], v);
+    while (heap.size) {
+      const v = heap.pop(), d = heap.lastKey;
+      if (d > dp[b + v]) continue;
+      for (const u of adj[v]) {
+        const nd = d + TILE * w[u] + trips;
+        if (nd < dp[b + u]) { dp[b + u] = nd; split[b + u] = -1; prev[b + u] = v; heap.push(nd, u); }
       }
     }
   }
@@ -508,36 +528,15 @@ function steinerHeuristic(G, terms) {
 
 // Path from s to t costing A per step plus B per new road tile.
 function cheapestPath(G, inNet, s, t, A, B) {
-  const dist = new Float64Array(G.n).fill(Infinity), prev = new Int32Array(G.n).fill(-1);
-  const hk = [], hv = [];
-  const push = (k, v) => {
-    let i = hk.length; hk.push(k); hv.push(v);
-    while (i > 0) { const p = (i - 1) >> 1; if (hk[p] <= k) break; hk[i] = hk[p]; hv[i] = hv[p]; i = p; }
-    hk[i] = k; hv[i] = v;
-  };
-  const pop = () => {
-    const k = hk[0], v = hv[0], lk = hk.pop(), lv = hv.pop(), m = hk.length;
-    if (m) {
-      let i = 0;
-      for (;;) {
-        let c = 2 * i + 1;
-        if (c >= m) break;
-        if (c + 1 < m && hk[c + 1] < hk[c]) c++;
-        if (hk[c] >= lk) break;
-        hk[i] = hk[c]; hv[i] = hv[c]; i = c;
-      }
-      hk[i] = lk; hv[i] = lv;
-    }
-    return [k, v];
-  };
-  dist[s] = 0; push(0, s);
-  while (hk.length) {
-    const [d, v] = pop();
+  const dist = new Float64Array(G.n).fill(Infinity), prev = new Int32Array(G.n).fill(-1), heap = new MinHeap();
+  dist[s] = 0; heap.push(0, s);
+  while (heap.size) {
+    const v = heap.pop(), d = heap.lastKey;
     if (d > dist[v]) continue;
     if (v === t) break;
     for (const u of G.adj[v]) {
       const nd = d + A + B * (inNet[u] ? 0 : G.w[u]);
-      if (nd < dist[u]) { dist[u] = nd; prev[u] = v; push(nd, u); }
+      if (nd < dist[u]) { dist[u] = nd; prev[u] = v; heap.push(nd, u); }
     }
   }
   const path = [];
