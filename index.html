@@ -1,0 +1,906 @@
+<title>Civ V Road Planner</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Marcellus&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+/* Layout: the hex map is the work surface on the left; a rail on the right holds the three plans and the city-to-city distance table. Stacks to one column on narrow screens. */
+:root {
+  --bg: #e6eae4;
+  --panel: #f6f8f4;
+  --line: #cdd4cb;
+  --ink: #18221e;
+  --muted: #58665f;
+  --hover: #e1e7df;
+  --accent: #0f6b7c;
+  --accent-ink: #ffffff;
+  --land: #c5d1a6;
+  --mount: #8f877b;
+  --mount-glyph: #f3eee4;
+  --water: #8bb3cb;
+  --water-glyph: #dceaf2;
+  --road: #7a4a14;
+  --road-tile: #e2cf9f;
+  --city: #22305e;
+  --city-ink: #f6f8f4;
+  --warn: #a2450e;
+
+  --display: "Marcellus", "Trajan Pro", Georgia, serif;
+  --body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11171a; --panel: #1a2226; --line: #2e3a3f; --ink: #e3e8e3; --muted: #93a29b; --hover: #24302f;
+    --accent: #4fb8c6; --accent-ink: #0d1517;
+    --land: #45563a; --mount: #6b655d; --mount-glyph: #bdb5a8; --water: #22465c; --water-glyph: #5a8aa4;
+    --road: #e0ab4a; --road-tile: #6b5a33; --city: #efe1b4; --city-ink: #1a2226; --warn: #f0a35e;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11171a; --panel: #1a2226; --line: #2e3a3f; --ink: #e3e8e3; --muted: #93a29b; --hover: #24302f;
+  --accent: #4fb8c6; --accent-ink: #0d1517;
+  --land: #45563a; --mount: #6b655d; --mount-glyph: #bdb5a8; --water: #22465c; --water-glyph: #5a8aa4;
+  --road: #e0ab4a; --road-tile: #6b5a33; --city: #efe1b4; --city-ink: #1a2226; --warn: #f0a35e;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font: 15px/1.5 var(--body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 24px 48px;
+}
+button, select, input { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.wrap { max-width: 1320px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+
+header { display: flex; flex-direction: column; gap: 4px; }
+h1 { font-family: var(--display); font-weight: 400; font-size: 2rem; line-height: 1.15; letter-spacing: 0.02em; margin: 0; text-wrap: balance; }
+header p { margin: 0; color: var(--muted); max-width: 68ch; }
+h2 { font-family: var(--display); font-weight: 400; font-size: 1.25rem; letter-spacing: 0.02em; margin: 0; text-wrap: balance; }
+
+.layout { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 24px; align-items: start; }
+@media (max-width: 980px) { .layout { grid-template-columns: minmax(0, 1fr); } }
+.map-col, .rail { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.rail { gap: 16px; }
+
+.toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; }
+.brushes { display: flex; flex-wrap: wrap; gap: 2px; padding: 3px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
+.brush { display: flex; align-items: center; gap: 8px; padding: 6px 12px; border: 0; border-radius: 7px; background: transparent; cursor: pointer; font-weight: 500; font-size: 14px; }
+.brush:hover { background: var(--hover); }
+.brush[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+.brush kbd { font: 500 11px var(--mono); opacity: 0.6; }
+.sw { width: 14px; height: 16px; flex: none; clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%); }
+.sw-land { background: var(--land); }
+.sw-city { background: var(--city); }
+.sw-mount { background: var(--mount); }
+.sw-water { background: var(--water); }
+.sw-road { background: var(--road-tile); box-shadow: inset 0 0 0 4px var(--road-tile); position: relative; }
+.brush[aria-pressed="true"] .sw-city { background: var(--bg); }
+
+.tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.tools label { font-size: 13px; color: var(--muted); }
+select, .ghost { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; font-size: 14px; cursor: pointer; }
+.ghost:hover, select:hover { background: var(--hover); }
+
+.map { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px; }
+#svg { display: block; width: 100%; height: auto; max-width: 100%; touch-action: none; user-select: none; -webkit-user-select: none; }
+.tile { stroke: var(--panel); stroke-width: 1.6; cursor: crosshair; }
+.tile:hover { opacity: 0.82; }
+.t-0, .t-1 { fill: var(--land); }
+.t-2 { fill: var(--mount); }
+.t-3 { fill: var(--water); }
+.tile.is-road { fill: var(--road-tile); }
+.layer { pointer-events: none; }
+.road { stroke: var(--road); stroke-width: 4.5; stroke-linecap: round; }
+.route { stroke: var(--accent); stroke-width: 7; stroke-linecap: round; stroke-linejoin: round; fill: none; opacity: 0.9; }
+.mglyph { fill: var(--mount-glyph); opacity: 0.85; }
+.wglyph { stroke: var(--water-glyph); stroke-width: 1.5; fill: none; stroke-linecap: round; }
+.city-dot { fill: var(--city); stroke: var(--panel); stroke-width: 2; }
+.city-label { fill: var(--city-ink); font: 600 12px var(--mono); text-anchor: middle; dominant-baseline: central; }
+
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; font-size: 13px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend .tip { flex-basis: 100%; }
+.road-key { width: 18px; height: 4px; border-radius: 2px; background: var(--road); }
+.route-key { width: 18px; height: 6px; border-radius: 3px; background: var(--accent); }
+
+.status { margin: 0; min-height: 1.5em; font-size: 14px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.status.error { color: var(--warn); font-weight: 500; }
+.status button { background: none; border: 1px solid var(--line); border-radius: 6px; padding: 2px 10px; cursor: pointer; }
+
+#plans { display: flex; flex-direction: column; gap: 8px; }
+.plan { display: flex; flex-direction: column; gap: 6px; width: 100%; text-align: left; padding: 14px 16px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; cursor: pointer; }
+.plan:hover { background: var(--hover); }
+.plan[aria-pressed="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.plan-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.plan-name { font-family: var(--display); font-size: 1.15rem; }
+.plan-desc { font-size: 13px; color: var(--muted); }
+.badge { font-size: 10.5px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; white-space: nowrap; }
+.plan[aria-pressed="true"] .badge { color: var(--accent); border-color: var(--accent); }
+.big { font: 500 2rem/1.1 var(--mono); font-variant-numeric: tabular-nums; display: flex; align-items: baseline; gap: 8px; }
+.big .unit { font: 400 13px var(--body); color: var(--muted); }
+.big.muted { color: var(--muted); }
+.stats { display: flex; flex-wrap: wrap; gap: 2px 14px; font-size: 13px; color: var(--muted); }
+.stats b { font: 500 13px var(--mono); color: var(--ink); font-variant-numeric: tabular-nums; }
+.note { font-size: 12.5px; color: var(--muted); font-style: italic; }
+
+.balance { display: flex; flex-direction: column; gap: 6px; padding: 12px 16px; border: 1px dashed var(--line); border-radius: 10px; }
+.balance label { font-size: 13.5px; }
+.balance output { font: 600 14px var(--mono); color: var(--accent); }
+.balance input { width: 100%; accent-color: var(--accent); }
+.scale { display: flex; justify-content: space-between; font-size: 11.5px; color: var(--muted); letter-spacing: 0.03em; }
+
+.section { display: flex; flex-direction: column; gap: 8px; }
+.hint { margin: 0; font-size: 13px; color: var(--muted); }
+.extra { color: var(--warn); font-size: 11px; }
+.matrix-wrap { overflow-x: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 6px; }
+.matrix-wrap .empty { margin: 8px; color: var(--muted); font-size: 13px; }
+table { border-collapse: collapse; font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 13px; }
+th { font-weight: 600; color: var(--muted); padding: 4px 6px; text-align: center; }
+td { padding: 1px; text-align: center; }
+td.diag { color: var(--line); }
+td button { min-width: 38px; width: 100%; padding: 5px 4px; border: 0; border-radius: 6px; background: transparent; cursor: pointer; white-space: nowrap; }
+td button:hover { background: var(--hover); }
+td button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+td button[aria-pressed="true"] .extra { color: inherit; }
+.route-info { margin: 0; font-size: 14px; min-height: 1.5em; }
+.route-info b { font-family: var(--mono); font-weight: 600; }
+
+details.method { font-size: 13.5px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 12px; }
+details.method summary { cursor: pointer; color: var(--ink); font-weight: 500; }
+details.method p { margin: 8px 0 0; max-width: 65ch; }
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Civ V Road Planner</h1>
+    <p>Paint your terrain, drop in your cities, and compare three road networks: the fewest road tiles, the shortest trips between cities, and a balance of the two.</p>
+  </header>
+
+  <div class="layout">
+    <section class="map-col" aria-label="Map">
+      <div class="toolbar">
+        <div class="brushes" role="group" aria-label="Paint brush">
+          <button class="brush" id="brush-1" data-t="1" aria-pressed="true"><span class="sw sw-city"></span>City<kbd>1</kbd></button>
+          <button class="brush" id="brush-2" data-t="2" aria-pressed="false"><span class="sw sw-mount"></span>Mountain<kbd>2</kbd></button>
+          <button class="brush" id="brush-3" data-t="3" aria-pressed="false"><span class="sw sw-water"></span>Water<kbd>3</kbd></button>
+          <button class="brush" id="brush-0" data-t="0" aria-pressed="false"><span class="sw sw-land"></span>Land<kbd>4</kbd></button>
+        </div>
+        <div class="tools">
+          <label for="size">Map</label>
+          <select id="size">
+            <option value="small">Small · 16 × 11</option>
+            <option value="standard">Standard · 22 × 14</option>
+            <option value="large">Large · 28 × 18</option>
+          </select>
+          <button class="ghost" id="example">Load example</button>
+          <button class="ghost" id="clear">Clear map</button>
+        </div>
+      </div>
+
+      <div class="map"><svg id="svg" role="img" aria-label="Hex map. Click or drag to paint tiles."></svg></div>
+
+      <div class="legend">
+        <span><i class="sw sw-land"></i>Land</span>
+        <span><i class="sw sw-road"></i><i class="road-key"></i>Road</span>
+        <span><i class="sw sw-mount"></i>Mountain</span>
+        <span><i class="sw sw-water"></i>Water</span>
+        <span><i class="sw sw-city"></i>City</span>
+        <span><i class="route-key"></i>Selected route</span>
+        <span class="tip">Click or drag to paint. Paint a tile with the brush it already has to turn it back into land.</span>
+      </div>
+      <p class="status" id="status" role="status"></p>
+    </section>
+
+    <aside class="rail" aria-label="Results">
+      <h2>Road plans</h2>
+      <div id="plans" role="group" aria-label="Road plan"></div>
+
+      <div class="balance">
+        <label for="thr">Balanced plan: add a shortcut when each new road tile saves at least <output id="thrOut" for="thr">2</output> tiles of travel</label>
+        <input type="range" id="thr" min="0.5" max="8" step="0.5" value="2">
+        <div class="scale"><span>More shortcuts</span><span>Fewer roads</span></div>
+      </div>
+
+      <div class="section">
+        <h2>Travel between cities</h2>
+        <p class="hint">Tiles moved along the selected plan's roads. <span class="extra">+n</span> means the trip is n tiles longer than the shortest land route. Pick a cell to trace that route.</p>
+        <div class="matrix-wrap" id="matrix"></div>
+        <p class="route-info" id="routeInfo"></p>
+      </div>
+
+      <details class="method">
+        <summary>How the plans are worked out</summary>
+        <p>Roads can go on any land tile. Mountains and water block them. City tiles already count as roads, so passing through a city costs nothing.</p>
+        <p><b>Fewest roads</b> is a minimum Steiner tree. For up to 12 cities it is solved exactly (Dreyfus–Wagner), so no smaller network exists. With more cities it uses a fast approximation.</p>
+        <p><b>Fastest travel</b> gives every pair of cities its shortest land route, overlapping routes wherever it can, then removes any tile that doesn't shorten a trip.</p>
+        <p><b>Balanced</b> starts from the fewest-roads network and adds the shortcut with the best travel saved per new tile, again and again, until no shortcut beats the slider. A shortcut only counts if it makes at least one trip 2 or more tiles shorter. Shortcuts that save a single tile are never built.</p>
+        <p>Total travel adds up the trip length for every pair of cities. Upkeep assumes 1 gold per road tile per turn.</p>
+      </details>
+    </aside>
+  </div>
+</div>
+
+<script>
+(() => {
+"use strict";
+
+// ALGO START
+const LAND = 0, CITY = 1, MOUNT = 2, WATER = 3;
+const EXACT_LIMIT = 12;
+
+// Odd rows are shifted right (pointy-top "odd-r" layout).
+function neighborCells(c, r, cols, rows) {
+  const d = (r & 1)
+    ? [[1, 0], [-1, 0], [0, -1], [1, -1], [0, 1], [1, 1]]
+    : [[1, 0], [-1, 0], [-1, -1], [0, -1], [-1, 1], [0, 1]];
+  const out = [];
+  for (const [dc, dr] of d) {
+    const nc = c + dc, nr = r + dr;
+    if (nc >= 0 && nc < cols && nr >= 0 && nr < rows) out.push(nr * cols + nc);
+  }
+  return out;
+}
+
+// Graph of tiles a road can use. Cities weigh 0, land weighs 1.
+function buildGraph(cols, rows, cells) {
+  const N = cols * rows, nodeOf = new Int32Array(N).fill(-1), cellOf = [];
+  for (let i = 0; i < N; i++) if (cells[i] === LAND || cells[i] === CITY) { nodeOf[i] = cellOf.length; cellOf.push(i); }
+  const n = cellOf.length, adj = new Array(n), w = new Uint8Array(n);
+  for (let v = 0; v < n; v++) {
+    const i = cellOf[v];
+    w[v] = cells[i] === CITY ? 0 : 1;
+    adj[v] = neighborCells(i % cols, Math.floor(i / cols), cols, rows).map(j => nodeOf[j]).filter(u => u >= 0);
+  }
+  return { n, adj, w, nodeOf, cellOf };
+}
+
+function bfs(G, src, allow) {
+  const dist = new Int32Array(G.n).fill(-1), q = new Int32Array(G.n);
+  let h = 0, t = 0;
+  dist[src] = 0; q[t++] = src;
+  while (h < t) {
+    const v = q[h++], dv = dist[v] + 1, a = G.adj[v];
+    for (let x = 0; x < a.length; x++) {
+      const u = a[x];
+      if (dist[u] < 0 && (!allow || allow[u])) { dist[u] = dv; q[t++] = u; }
+    }
+  }
+  return dist;
+}
+
+function bfsPath(G, allow, s, t) {
+  const prev = new Int32Array(G.n).fill(-1), seen = new Uint8Array(G.n), q = [s];
+  seen[s] = 1;
+  for (let h = 0; h < q.length; h++) {
+    const v = q[h];
+    if (v === t) break;
+    for (const u of G.adj[v]) if (!seen[u] && allow[u]) { seen[u] = 1; prev[u] = v; q.push(u); }
+  }
+  if (!seen[t]) return [];
+  const path = [];
+  for (let v = t; v !== -1; v = prev[v]) path.push(v);
+  return path.reverse();
+}
+
+// Trip lengths between every pair of cities, using only network tiles.
+function evalNet(G, terms, inNet) {
+  const k = terms.length, mat = [];
+  for (let i = 0; i < k; i++) mat.push(new Array(k).fill(0));
+  let sum = 0, max = 0;
+  for (let i = 0; i < k; i++) {
+    const dist = bfs(G, terms[i], inNet);
+    for (let j = i + 1; j < k; j++) {
+      const d = dist[terms[j]];
+      if (d < 0) return { ok: false, sum: Infinity, max: Infinity, mat };
+      mat[i][j] = mat[j][i] = d;
+      sum += d;
+      if (d > max) max = d;
+    }
+  }
+  return { ok: true, sum, max, mat };
+}
+
+function countTiles(G, inNet) {
+  let c = 0;
+  for (let v = 0; v < G.n; v++) if (inNet[v] && G.w[v]) c++;
+  return c;
+}
+
+// Exact node-weighted Steiner tree (Dreyfus–Wagner).
+function steinerExact(G, terms) {
+  const { n, adj, w } = G, k = terms.length, M = 1 << k, full = M - 1;
+  const dp = new Float64Array(M * n).fill(Infinity);
+  const split = new Int32Array(M * n).fill(-1);
+  const prev = new Int32Array(M * n).fill(-1);
+  for (let S = 1; S < M; S++) {
+    const b = S * n;
+    if ((S & (S - 1)) === 0) {
+      const t = terms[31 - Math.clz32(S)];
+      dp[b + t] = w[t];
+    } else {
+      const low = S & -S;
+      for (let sub = (S - 1) & S; sub > 0; sub = (sub - 1) & S) {
+        if (!(sub & low)) continue;
+        const b1 = sub * n, b2 = (S ^ sub) * n;
+        for (let v = 0; v < n; v++) {
+          const val = dp[b1 + v] + dp[b2 + v] - w[v];
+          if (val < dp[b + v]) { dp[b + v] = val; split[b + v] = sub; }
+        }
+      }
+    }
+    // Spread outward with a bucket queue (edge costs are 0 or 1).
+    const buckets = [];
+    for (let v = 0; v < n; v++) {
+      const d = dp[b + v];
+      if (d < Infinity) (buckets[d] || (buckets[d] = [])).push(v);
+    }
+    for (let c = 0; c < buckets.length; c++) {
+      const L = buckets[c];
+      if (!L) continue;
+      for (let i = 0; i < L.length; i++) {
+        const v = L[i];
+        if (dp[b + v] !== c) continue;
+        for (const u of adj[v]) {
+          const nd = c + w[u];
+          if (nd < dp[b + u]) {
+            dp[b + u] = nd; split[b + u] = -1; prev[b + u] = v;
+            (buckets[nd] || (buckets[nd] = [])).push(u);
+          }
+        }
+      }
+    }
+  }
+  const inNet = new Uint8Array(n), stack = [[full, terms[0]]];
+  while (stack.length) {
+    const [S, v] = stack.pop(), idx = S * n + v;
+    inNet[v] = 1;
+    if (split[idx] >= 0) stack.push([split[idx], v], [S ^ split[idx], v]);
+    else if (prev[idx] >= 0) stack.push([S, prev[idx]]);
+  }
+  return inNet;
+}
+
+// Cheapest growth from the current network, where existing tiles are free.
+function growFrom(G, inNet) {
+  const dist = new Int32Array(G.n).fill(1e9), prev = new Int32Array(G.n).fill(-1), buckets = [[]];
+  for (let v = 0; v < G.n; v++) if (inNet[v]) { dist[v] = 0; buckets[0].push(v); }
+  for (let c = 0; c < buckets.length; c++) {
+    const L = buckets[c];
+    if (!L) continue;
+    for (let i = 0; i < L.length; i++) {
+      const v = L[i];
+      if (dist[v] !== c) continue;
+      for (const u of G.adj[v]) {
+        const nd = c + (inNet[u] ? 0 : G.w[u]);
+        if (nd < dist[u]) { dist[u] = nd; prev[u] = v; (buckets[nd] || (buckets[nd] = [])).push(u); }
+      }
+    }
+  }
+  return { dist, prev };
+}
+
+function pruneLeaves(G, inNet, isTerm) {
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (let v = 0; v < G.n; v++) {
+      if (!inNet[v] || isTerm[v]) continue;
+      let deg = 0;
+      for (const u of G.adj[v]) if (inNet[u]) deg++;
+      if (deg <= 1) { inNet[v] = 0; changed = true; }
+    }
+  }
+}
+
+// Shortest-path heuristic for maps with too many cities to solve exactly.
+function steinerHeuristic(G, terms) {
+  const isTerm = new Uint8Array(G.n);
+  for (const t of terms) isTerm[t] = 1;
+  let best = null, bestTiles = Infinity;
+  for (const start of terms.slice(0, 8)) {
+    const inNet = new Uint8Array(G.n);
+    inNet[start] = 1;
+    const remaining = new Set(terms.filter(t => t !== start));
+    while (remaining.size) {
+      const { dist, prev } = growFrom(G, inNet);
+      let pick = -1;
+      for (const t of remaining) if (pick < 0 || dist[t] < dist[pick]) pick = t;
+      for (let v = pick; v !== -1 && !inNet[v]; v = prev[v]) inNet[v] = 1;
+      for (const t of [...remaining]) if (inNet[t]) remaining.delete(t);
+    }
+    pruneLeaves(G, inNet, isTerm);
+    const tiles = countTiles(G, inNet);
+    if (tiles < bestTiles) { bestTiles = tiles; best = inNet; }
+  }
+  return best;
+}
+
+// Path from s to t costing A per step plus B per new road tile.
+function cheapestPath(G, inNet, s, t, A, B) {
+  const dist = new Float64Array(G.n).fill(Infinity), prev = new Int32Array(G.n).fill(-1);
+  const hk = [], hv = [];
+  const push = (k, v) => {
+    let i = hk.length; hk.push(k); hv.push(v);
+    while (i > 0) { const p = (i - 1) >> 1; if (hk[p] <= k) break; hk[i] = hk[p]; hv[i] = hv[p]; i = p; }
+    hk[i] = k; hv[i] = v;
+  };
+  const pop = () => {
+    const k = hk[0], v = hv[0], lk = hk.pop(), lv = hv.pop(), m = hk.length;
+    if (m) {
+      let i = 0;
+      for (;;) {
+        let c = 2 * i + 1;
+        if (c >= m) break;
+        if (c + 1 < m && hk[c + 1] < hk[c]) c++;
+        if (hk[c] >= lk) break;
+        hk[i] = hk[c]; hv[i] = hv[c]; i = c;
+      }
+      hk[i] = lk; hv[i] = lv;
+    }
+    return [k, v];
+  };
+  dist[s] = 0; push(0, s);
+  while (hk.length) {
+    const [d, v] = pop();
+    if (d > dist[v]) continue;
+    if (v === t) break;
+    for (const u of G.adj[v]) {
+      const nd = d + A + B * (inNet[u] ? 0 : G.w[u]);
+      if (nd < dist[u]) { dist[u] = nd; prev[u] = v; push(nd, u); }
+    }
+  }
+  const path = [];
+  for (let v = t; v !== -1; v = prev[v]) path.push(v);
+  return path;
+}
+
+// Drop road tiles one at a time while total travel stays within maxSum.
+function prune(G, terms, inNet, maxSum) {
+  for (let pass = 0; pass < 3; pass++) {
+    let changed = false;
+    for (let v = G.n - 1; v >= 0; v--) {
+      if (!inNet[v] || !G.w[v]) continue;
+      inNet[v] = 0;
+      const e = evalNet(G, terms, inNet);
+      if (e.ok && e.sum <= maxSum) changed = true; else inNet[v] = 1;
+    }
+    if (!changed) break;
+  }
+  return inNet;
+}
+
+function buildFastest(G, terms, ideal, idealSum, fewest) {
+  const pairs = [];
+  for (let i = 0; i < terms.length; i++) for (let j = i + 1; j < terms.length; j++) pairs.push([i, j, ideal[i][j]]);
+  const asc = pairs.slice().sort((a, b) => a[2] - b[2]);
+  const desc = asc.slice().reverse();
+  let best = null, bestTiles = Infinity;
+  for (const [order, seed] of [[asc, null], [desc, null], [asc, fewest], [desc, fewest]]) {
+    const inNet = seed ? seed.slice() : new Uint8Array(G.n);
+    for (const t of terms) inNet[t] = 1;
+    for (const [i, j] of order) for (const v of cheapestPath(G, inNet, terms[i], terms[j], 1000, 1)) inNet[v] = 1;
+    prune(G, terms, inNet, idealSum);
+    const tiles = countTiles(G, inNet);
+    if (tiles < bestTiles) { bestTiles = tiles; best = inNet; }
+  }
+  return best;
+}
+
+const SHORTCUT_COSTS = [[1000, 1], [1, 1], [1, 2], [1, 4]];
+// A shortcut must cut at least one city-to-city trip by this many tiles.
+const MIN_ROUTE_GAIN = 2;
+
+function bestTripGain(before, after) {
+  let g = 0;
+  for (let i = 0; i < before.length; i++) for (let j = i + 1; j < before.length; j++) g = Math.max(g, before[i][j] - after[i][j]);
+  return g;
+}
+
+function buildBalanced(G, terms, ideal, fewest, thr) {
+  const inNet = fewest.slice(), k = terms.length;
+  let cur = evalNet(G, terms, inNet);
+  for (let iter = 0; iter < 80; iter++) {
+    let best = null;
+    const seen = new Set();
+    for (let i = 0; i < k; i++) for (let j = i + 1; j < k; j++) {
+      if (cur.mat[i][j] - ideal[i][j] < MIN_ROUTE_GAIN) continue;
+      for (const [A, B] of SHORTCUT_COSTS) {
+        const added = cheapestPath(G, inNet, terms[i], terms[j], A, B).filter(v => !inNet[v] && G.w[v]).sort((a, b) => a - b);
+        if (!added.length) continue;
+        const key = added.join(",");
+        if (seen.has(key)) continue;
+        seen.add(key);
+        for (const v of added) inNet[v] = 1;
+        const e = evalNet(G, terms, inNet);
+        for (const v of added) inNet[v] = 0;
+        const ratio = (cur.sum - e.sum) / added.length;
+        if (ratio >= thr && bestTripGain(cur.mat, e.mat) >= MIN_ROUTE_GAIN && (!best || ratio > best.ratio + 1e-9 || (Math.abs(ratio - best.ratio) < 1e-9 && added.length < best.added.length))) {
+          best = { ratio, added, e };
+        }
+      }
+    }
+    if (!best) break;
+    for (const v of best.added) inNet[v] = 1;
+    cur = best.e;
+  }
+  return prune(G, terms, inNet, cur.sum);
+}
+
+function solve(cols, rows, cells, cityCells, thr) {
+  const G = buildGraph(cols, rows, cells);
+  const terms = cityCells.map(i => G.nodeOf[i]);
+  const k = terms.length, ideal = [];
+  let idealSum = 0;
+  for (let i = 0; i < k; i++) {
+    const dist = bfs(G, terms[i], null);
+    ideal.push(terms.map(t => dist[t]));
+  }
+  for (let j = 1; j < k; j++) if (ideal[0][j] < 0) return { ok: false, unreachable: [0, j] };
+  for (let i = 0; i < k; i++) for (let j = i + 1; j < k; j++) idealSum += ideal[i][j];
+
+  const exact = k <= EXACT_LIMIT;
+  const fewestNet = exact ? steinerExact(G, terms) : steinerHeuristic(G, terms);
+  const fastestNet = buildFastest(G, terms, ideal, idealSum, fewestNet);
+  const balancedNet = buildBalanced(G, terms, ideal, fewestNet, thr);
+  const mk = net => ({ inNet: net, tiles: countTiles(G, net), ...evalNet(G, terms, net), note: "" });
+  let fewest = mk(fewestNet), fastest = mk(fastestNet), balanced = mk(balancedNet);
+  // Among networks with the minimum tile count, keep the one with shorter trips.
+  for (const p of [balanced, fastest]) if (p.tiles === fewest.tiles && p.sum < fewest.sum) fewest = { ...p };
+  if (fewest.sum <= fastest.sum && fewest.tiles <= fastest.tiles) fastest = { ...fewest };
+  if (balanced.tiles >= fastest.tiles && balanced.sum >= fastest.sum) balanced = { ...fastest };
+  const same = (a, b) => a.tiles === b.tiles && a.sum === b.sum;
+  if (same(balanced, fewest)) balanced.note = "Same as fewest roads. No shortcut saves enough travel at this setting.";
+  else if (same(balanced, fastest)) balanced.note = "Same as fastest travel at this setting.";
+  if (same(fastest, fewest)) fastest.note = "The fewest-roads network already gives every trip its shortest route.";
+  return { ok: true, G, terms, ideal, idealSum, exact, fewest, balanced, fastest };
+}
+// ALGO END
+
+if (typeof document === "undefined") { globalThis.__algo = { solve, LAND, CITY, MOUNT, WATER }; return; }
+
+// ---- Page ----
+const SQ3 = Math.sqrt(3), R = 20;
+const SIZES = { small: [16, 11], standard: [22, 14], large: [28, 18] };
+const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+const KEY = "civ5-road-planner-v1";
+const PLAN_INFO = {
+  fewest: { name: "Fewest roads", desc: "The smallest network that links every city." },
+  balanced: { name: "Balanced", desc: "Fewest roads, plus shortcuts that cut a trip by 2 or more tiles." },
+  fastest: { name: "Fastest travel", desc: "Every pair of cities on its shortest land route." },
+};
+
+const $ = s => document.querySelector(s);
+const svg = $("#svg");
+
+let S = load() || sample();
+let brush = CITY, plans = null, route = null, painting = false, paintType = LAND, timer = 0, undoSnap = null;
+
+function blank(cols, rows) {
+  return { cols, rows, cells: new Array(cols * rows).fill(LAND), labels: {}, thr: 2, selected: "balanced" };
+}
+
+function sample() {
+  const s = blank(22, 14);
+  const set = (c, r, t) => { s.cells[r * s.cols + c] = t; };
+  for (let r = 0; r < 14; r++) set(0, r, WATER);
+  for (let r = 7; r < 14; r++) set(1, r, WATER);
+  for (let r = 10; r < 14; r++) set(2, r, WATER);
+  for (let c = 0; c < 7; c++) set(c, 13, WATER);
+  for (const [c, r] of [[14, 6], [15, 6], [13, 7], [14, 7], [15, 7], [14, 8]]) set(c, r, WATER);
+  for (const [c, r] of [[8, 1], [8, 2], [9, 3], [9, 4], [10, 5], [10, 7], [11, 8], [11, 9], [18, 11], [19, 11], [19, 12]]) set(c, r, MOUNT);
+  [[4, 3], [12, 2], [19, 4], [5, 9], [16, 10], [11, 6]].forEach(([c, r], n) => {
+    const i = r * s.cols + c;
+    s.cells[i] = CITY; s.labels[i] = LETTERS[n];
+  });
+  return s;
+}
+
+function load() {
+  try {
+    const o = JSON.parse(localStorage.getItem(KEY));
+    if (!o || !Object.values(SIZES).some(([c, r]) => c === o.cols && r === o.rows)) return null;
+    if (!Array.isArray(o.cells) || o.cells.length !== o.cols * o.rows) return null;
+    const s = { ...blank(o.cols, o.rows), cells: o.cells.map(v => (v >= 0 && v <= 3 ? v : LAND)), thr: +o.thr || 2, selected: PLAN_INFO[o.selected] ? o.selected : "balanced" };
+    const used = new Set();
+    for (const [i, l] of Object.entries(o.labels || {})) if (s.cells[i] === CITY && LETTERS.includes(l) && !used.has(l)) { s.labels[i] = l; used.add(l); }
+    s.cells.forEach((v, i) => { if (v === CITY && !s.labels[i]) { const l = [...LETTERS].find(x => !used.has(x)); if (l) { s.labels[i] = l; used.add(l); } else s.cells[i] = LAND; } });
+    return s;
+  } catch (e) { return null; }
+}
+
+function save() {
+  try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* storage unavailable */ }
+}
+
+function cityList() {
+  return Object.entries(S.labels).map(([i, label]) => ({ i: +i, label })).sort((a, b) => a.label.localeCompare(b.label));
+}
+
+// ---- Map drawing ----
+function center(i) {
+  const c = i % S.cols, r = Math.floor(i / S.cols);
+  return [R * SQ3 * (c + 0.5 * (r & 1)), R * 1.5 * r];
+}
+
+function hexPoints(x, y) {
+  const pts = [];
+  for (let k = 0; k < 6; k++) {
+    const a = Math.PI / 180 * (60 * k - 30);
+    pts.push((x + R * Math.cos(a)).toFixed(2) + "," + (y + R * Math.sin(a)).toFixed(2));
+  }
+  return pts.join(" ");
+}
+
+let tilesEls = [];
+function buildSvg() {
+  const { cols, rows } = S;
+  const minX = -R * SQ3 / 2 - 3, minY = -R - 3;
+  svg.setAttribute("viewBox", `${minX} ${minY} ${R * SQ3 * (cols + 0.5) + 6} ${R * 1.5 * (rows - 1) + 2 * R + 6}`);
+  let t = "";
+  for (let i = 0; i < cols * rows; i++) { const [x, y] = center(i); t += `<polygon class="tile" points="${hexPoints(x, y)}"></polygon>`; }
+  svg.innerHTML = `<g id="gT">${t}</g><g id="gR" class="layer"></g><g id="gRt" class="layer"></g><g id="gM" class="layer"></g>`;
+  tilesEls = [...svg.querySelectorAll(".tile")];
+  $("#size").value = Object.keys(SIZES).find(k => SIZES[k][0] === cols) || "standard";
+}
+
+function hexAt(e) {
+  const pt = svg.createSVGPoint();
+  pt.x = e.clientX; pt.y = e.clientY;
+  const p = pt.matrixTransform(svg.getScreenCTM().inverse());
+  const q = (SQ3 / 3 * p.x - p.y / 3) / R, r = (2 / 3 * p.y) / R, s = -q - r;
+  let rq = Math.round(q), rr = Math.round(r), rs = Math.round(s);
+  const dq = Math.abs(rq - q), dr = Math.abs(rr - r), ds = Math.abs(rs - s);
+  if (dq > dr && dq > ds) rq = -rr - rs; else if (dr > ds) rr = -rq - rs;
+  if (rr < 0 || rr >= S.rows) return -1;
+  const c = rq + (rr - (rr & 1)) / 2;
+  return c >= 0 && c < S.cols ? rr * S.cols + c : -1;
+}
+
+function current() { return plans && plans.ok ? plans[S.selected] : null; }
+
+function renderMap() {
+  const p = current(), G = plans && plans.ok ? plans.G : null;
+  const roadCell = new Uint8Array(S.cells.length);
+  let roads = "";
+  if (p) {
+    for (let v = 0; v < G.n; v++) {
+      if (!p.inNet[v]) continue;
+      if (G.w[v]) roadCell[G.cellOf[v]] = 1;
+      const [x1, y1] = center(G.cellOf[v]);
+      for (const u of G.adj[v]) {
+        if (u < v || !p.inNet[u]) continue;
+        const [x2, y2] = center(G.cellOf[u]);
+        roads += `<line class="road" x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}"></line>`;
+      }
+    }
+  }
+  tilesEls.forEach((el, i) => el.setAttribute("class", `tile t-${S.cells[i]}${roadCell[i] ? " is-road" : ""}`));
+  $("#gR").innerHTML = roads;
+
+  let rt = "";
+  if (p && route) {
+    const path = bfsPath(G, p.inNet, plans.terms[route[0]], plans.terms[route[1]]);
+    rt = `<polyline class="route" points="${path.map(v => center(G.cellOf[v]).map(n => n.toFixed(1)).join(",")).join(" ")}"></polyline>`;
+  }
+  $("#gRt").innerHTML = rt;
+
+  let m = "";
+  S.cells.forEach((t, i) => {
+    const [x, y] = center(i);
+    if (t === MOUNT) m += `<path class="mglyph" d="M${x - 8},${y + 6}L${x - 2},${y - 6}L${x + 1},${y - 1}L${x + 4},${y - 5}L${x + 9},${y + 6}Z"></path>`;
+    else if (t === WATER) m += `<path class="wglyph" d="M${x - 7},${y - 2}q3.5,-3 7,0t7,0M${x - 7},${y + 4}q3.5,-3 7,0t7,0"></path>`;
+    else if (t === CITY) m += `<circle class="city-dot" cx="${x}" cy="${y}" r="10.5"></circle><text class="city-label" x="${x}" y="${y + 0.5}">${S.labels[i]}</text>`;
+  });
+  $("#gM").innerHTML = m;
+}
+
+// ---- Rail ----
+function renderPlans() {
+  const ok = plans && plans.ok;
+  $("#plans").innerHTML = Object.keys(PLAN_INFO).map(key => {
+    const info = PLAN_INFO[key], p = ok ? plans[key] : null;
+    const badge = key === "fewest" && ok ? `<span class="badge">${plans.exact ? "Proven minimum" : "Best found"}</span>` : "";
+    const body = p
+      ? `<div class="big">${p.tiles}<span class="unit">road tile${p.tiles === 1 ? "" : "s"}</span></div>
+         <div class="stats">
+           <span>Total travel <b>${p.sum}</b> (best possible <b>${plans.idealSum}</b>)</span>
+           <span>Longest trip <b>${p.max}</b></span>
+           <span>Upkeep <b>${p.tiles}</b> gold/turn</span>
+         </div>${p.note ? `<div class="note">${p.note}</div>` : ""}`
+      : `<div class="big muted">${plans === null ? "…" : "—"}</div>`;
+    return `<button class="plan" id="plan-${key}" data-k="${key}" aria-pressed="${S.selected === key}">
+      <div class="plan-head"><span class="plan-name">${info.name}</span>${badge}</div>
+      <div class="plan-desc">${info.desc}</div>${body}</button>`;
+  }).join("");
+}
+
+function renderMatrix() {
+  const box = $("#matrix"), info = $("#routeInfo");
+  const p = current();
+  if (!p) {
+    box.innerHTML = `<p class="empty">${plans === null ? "Working out routes…" : "Distances appear here once two or more cities can reach each other."}</p>`;
+    info.textContent = "";
+    return;
+  }
+  const L = cityList().map(c => c.label), ideal = plans.ideal;
+  let h = `<table><thead><tr><th></th>${L.map(l => `<th scope="col">${l}</th>`).join("")}</tr></thead><tbody>`;
+  L.forEach((li, i) => {
+    h += `<tr><th scope="row">${li}</th>`;
+    L.forEach((lj, j) => {
+      if (i === j) { h += `<td class="diag">·</td>`; return; }
+      const d = p.mat[i][j], extra = d - ideal[i][j];
+      const on = route && ((route[0] === i && route[1] === j) || (route[0] === j && route[1] === i));
+      h += `<td><button data-i="${i}" data-j="${j}" aria-pressed="${!!on}" aria-label="${li} to ${lj}: ${d} tiles">${d}${extra > 0 ? `<span class="extra">+${extra}</span>` : ""}</button></td>`;
+    });
+    h += "</tr>";
+  });
+  box.innerHTML = h + "</tbody></table>";
+  if (route) {
+    const [i, j] = route, d = p.mat[i][j], best = ideal[i][j];
+    info.innerHTML = `${L[i]} → ${L[j]}: <b>${d}</b> tiles on roads. ${d === best ? "That is the shortest possible land route." : `The shortest land route is <b>${best}</b>.`}`;
+  } else info.textContent = "";
+}
+
+function setStatus(msg, opts = {}) {
+  const el = $("#status");
+  el.className = "status" + (opts.error ? " error" : "");
+  el.textContent = msg;
+  if (opts.undo) {
+    const b = document.createElement("button");
+    b.id = "undo"; b.textContent = "Undo";
+    b.addEventListener("click", () => {
+      if (!undoSnap) return;
+      S = undoSnap; undoSnap = null;
+      buildSvg(); recompute(); setStatus("Map restored.");
+    });
+    el.append(b);
+  }
+}
+
+function render() { renderMap(); renderPlans(); renderMatrix(); }
+
+// ---- Solve ----
+function compute() {
+  const cities = cityList();
+  if (cities.length < 2) {
+    plans = { ok: false };
+    setStatus(cities.length ? "Place at least one more city to plan roads." : "Pick the City brush and click the map to place your cities.");
+    return;
+  }
+  const res = solve(S.cols, S.rows, S.cells, cities.map(c => c.i), S.thr);
+  plans = res;
+  if (!res.ok) {
+    const [a, b] = res.unreachable;
+    setStatus(`City ${cities[b].label} can't reach city ${cities[a].label} over land. Clear a path through the water or mountains.`, { error: true });
+  } else if (!res.exact) {
+    setStatus(`With ${cities.length} cities the fewest-roads plan is a close approximation. Up to ${EXACT_LIMIT} cities it is exact.`);
+  } else if (!undoSnap) setStatus("");
+}
+
+function recompute() {
+  clearTimeout(timer);
+  if (cityList().length <= 8) { compute(); render(); save(); return; }
+  plans = null; render();
+  timer = setTimeout(() => { compute(); render(); save(); }, 160);
+}
+
+function setCell(i, t) {
+  const old = S.cells[i];
+  if (old === t) return false;
+  if (t === CITY) {
+    const used = new Set(Object.values(S.labels));
+    const l = [...LETTERS].find(x => !used.has(x));
+    if (!l) { setStatus("A map can hold up to 26 cities.", { error: true }); return false; }
+    S.labels[i] = l;
+  } else if (old === CITY) delete S.labels[i];
+  S.cells[i] = t;
+  return true;
+}
+
+function edit(i) {
+  if (!setCell(i, paintType)) return;
+  undoSnap = null;
+  route = null;
+  recompute();
+}
+
+// ---- Events ----
+svg.addEventListener("pointerdown", e => {
+  if (e.button !== 0) return;
+  const i = hexAt(e);
+  if (i < 0) return;
+  e.preventDefault();
+  painting = true;
+  paintType = S.cells[i] === brush && brush !== LAND ? LAND : brush;
+  svg.setPointerCapture(e.pointerId);
+  edit(i);
+});
+svg.addEventListener("pointermove", e => {
+  if (!painting) return;
+  const i = hexAt(e);
+  if (i >= 0) edit(i);
+});
+const endPaint = () => { painting = false; };
+svg.addEventListener("pointerup", endPaint);
+svg.addEventListener("pointercancel", endPaint);
+
+function setBrush(t) {
+  brush = t;
+  document.querySelectorAll(".brush").forEach(b => b.setAttribute("aria-pressed", String(+b.dataset.t === t)));
+}
+document.querySelectorAll(".brush").forEach(b => b.addEventListener("click", () => setBrush(+b.dataset.t)));
+document.addEventListener("keydown", e => {
+  if (e.metaKey || e.ctrlKey || e.altKey || /INPUT|SELECT|TEXTAREA/.test(e.target.tagName)) return;
+  const map = { "1": CITY, "2": MOUNT, "3": WATER, "4": LAND };
+  if (e.key in map) setBrush(map[e.key]);
+});
+
+$("#plans").addEventListener("click", e => {
+  const b = e.target.closest(".plan");
+  if (!b) return;
+  S.selected = b.dataset.k;
+  save(); render();
+});
+
+$("#matrix").addEventListener("click", e => {
+  const b = e.target.closest("button[data-i]");
+  if (!b) return;
+  const i = +b.dataset.i, j = +b.dataset.j;
+  const same = route && ((route[0] === i && route[1] === j) || (route[0] === j && route[1] === i));
+  route = same ? null : [i, j];
+  renderMap(); renderMatrix();
+});
+
+const thr = $("#thr");
+thr.addEventListener("input", () => {
+  S.thr = +thr.value;
+  $("#thrOut").textContent = S.thr;
+  recompute();
+});
+
+$("#size").addEventListener("change", e => {
+  const [c2, r2] = SIZES[e.target.value];
+  const next = { ...blank(c2, r2), thr: S.thr, selected: S.selected };
+  for (let r = 0; r < Math.min(S.rows, r2); r++) for (let c = 0; c < Math.min(S.cols, c2); c++) {
+    const from = r * S.cols + c, to = r * c2 + c;
+    next.cells[to] = S.cells[from];
+    if (S.labels[from]) next.labels[to] = S.labels[from];
+  }
+  S = next; route = null;
+  buildSvg(); recompute();
+});
+
+$("#example").addEventListener("click", () => {
+  undoSnap = JSON.parse(JSON.stringify(S));
+  S = { ...sample(), thr: S.thr, selected: S.selected };
+  route = null;
+  buildSvg(); recompute();
+  setStatus("Example map loaded.", { undo: true });
+});
+
+$("#clear").addEventListener("click", () => {
+  undoSnap = JSON.parse(JSON.stringify(S));
+  S = { ...blank(S.cols, S.rows), thr: S.thr, selected: S.selected };
+  route = null;
+  buildSvg(); recompute();
+  setStatus("Map cleared.", { undo: true });
+});
+
+// ---- Start ----
+thr.value = S.thr;
+$("#thrOut").textContent = S.thr;
+buildSvg();
+compute();
+render();
+})();
+</script>
