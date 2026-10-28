@@ -6,7 +6,8 @@ Plan Civilization V road networks on a hex map. Place cities, mountains and wate
 
 Open `index.html` in a browser. There is no build step and nothing to install.
 
-- Pick a brush (City, Mountain, Water, Land) and click or drag on the map. Keys 1–4 switch brushes.
+- Pick a brush (City, Mountain, Water, Land, Road) and click or drag on the map. Keys 1–5 switch brushes.
+- The Road brush forces a road onto a tile. Every plan includes forced roads, connects them, and counts them as road tiles.
 - On touch screens, tap or drag sideways to paint; swiping up or down scrolls the page. When the map is wider than the screen, a Move brush appears for scrolling it sideways.
 - Painting a tile with the brush it already has turns it back into land.
 - Use the Shift arrows (or arrow keys) to move everything on the map one tile. Cities never fall off the edge.
