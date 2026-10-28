@@ -7,8 +7,11 @@ Plan Civilization V road networks on a hex map. Place cities, mountains and wate
 Open `index.html` in a browser. There is no build step and nothing to install.
 
 - Pick a brush (City, Mountain, Water, Land) and click or drag on the map. Keys 1–4 switch brushes.
-- Pick Move (key 5) to scroll the map without painting. On phones the map keeps tappable hexes and scrolls inside its frame.
+- On touch screens, tap or drag sideways to paint; swiping up or down scrolls the page. When the map is wider than the screen, a Move brush appears for scrolling it sideways.
 - Painting a tile with the brush it already has turns it back into land.
+- Use the Shift arrows (or arrow keys) to move everything on the map one tile. Cities never fall off the edge.
+- Pick a map size or enter a custom one, from 4 × 4 up to 50 × 50.
+- Choose a road plan from the dropdown above the map. Balanced has a shortcut value you can step up or down.
 - Pick a cell in the travel table to trace that route on the map.
 - Your map is saved in your browser's local storage.
 

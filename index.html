@@ -65,10 +65,9 @@ h1 { font-family: var(--display); font-weight: 400; font-size: 2rem; line-height
 header p { margin: 0; color: var(--muted); max-width: 68ch; }
 h2 { font-family: var(--display); font-weight: 400; font-size: 1.25rem; letter-spacing: 0.02em; margin: 0; text-wrap: balance; }
 
-.layout { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 24px; align-items: start; }
-@media (max-width: 980px) { .layout { grid-template-columns: minmax(0, 1fr); } }
-.map-col, .rail { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
-.rail { gap: 16px; }
+.workspace { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.below { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 24px; align-items: start; }
+@media (max-width: 900px) { .below { grid-template-columns: minmax(0, 1fr); } }
 
 .toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; }
 .brushes { display: flex; flex-wrap: wrap; gap: 2px; padding: 3px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
@@ -88,15 +87,22 @@ h2 { font-family: var(--display); font-weight: 400; font-size: 1.25rem; letter-s
 .tools label { font-size: 13px; color: var(--muted); }
 select, .ghost { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; font-size: 14px; cursor: pointer; }
 .ghost:hover, select:hover { background: var(--hover); }
+.custom-size { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
+.custom-size input { width: 4.2em; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; font: 500 14px var(--mono); }
+.shift { display: inline-flex; align-items: center; gap: 2px; padding: 2px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
+.shift span { font-size: 13px; color: var(--muted); padding: 0 6px 0 4px; }
+.shift button { display: grid; place-items: center; width: 30px; height: 28px; border: 0; border-radius: 6px; background: transparent; cursor: pointer; }
+.shift button:hover { background: var(--hover); }
+.shift svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 
-.move-icon { width: 15px; height: 15px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
-
-.map { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px; overflow: auto; overscroll-behavior: contain; }
-#svg { display: block; width: 100%; height: auto; touch-action: none; user-select: none; -webkit-user-select: none; }
-#svg.panning { touch-action: pan-x pan-y; }
-.tile { stroke: var(--panel); stroke-width: 1.6; cursor: crosshair; }
+/* Only sideways scrolling inside the frame; vertical wheel and swipes go to the page. */
+.map { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px; overflow-x: auto; overflow-y: hidden; }
+#svg { display: block; width: 100%; height: auto; touch-action: pan-y pinch-zoom; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+#svg.panning { touch-action: pan-x pan-y pinch-zoom; }
 #svg.panning .tile { cursor: grab; }
-@media (hover: hover) { .tile:hover { opacity: 0.82; } #svg.panning .tile:hover { opacity: 1; } }
+.move-icon { width: 15px; height: 15px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.tile { stroke: var(--panel); stroke-width: 1.6; cursor: crosshair; }
+@media (hover: hover) { .tile:hover { opacity: 0.82; } }
 .t-0, .t-1 { fill: var(--land); }
 .t-2 { fill: var(--mount); }
 .t-3 { fill: var(--water); }
@@ -104,6 +110,7 @@ select, .ghost { background: var(--panel); border: 1px solid var(--line); border
 .layer { pointer-events: none; }
 .road { stroke: var(--road); stroke-width: 4.5; stroke-linecap: round; }
 .route { stroke: var(--accent); stroke-width: 7; stroke-linecap: round; stroke-linejoin: round; fill: none; opacity: 0.9; }
+#svg.stale #gR, #svg.stale #gRt { opacity: 0.4; }
 .mglyph { fill: var(--mount-glyph); opacity: 0.85; }
 .wglyph { stroke: var(--water-glyph); stroke-width: 1.5; fill: none; stroke-linecap: round; }
 .city-dot { fill: var(--city); stroke: var(--panel); stroke-width: 2; }
@@ -113,6 +120,7 @@ select, .ghost { background: var(--panel); border: 1px solid var(--line); border
 .legend span { display: inline-flex; align-items: center; gap: 6px; }
 .legend .tip { flex-basis: 100%; }
 .legend .tip-touch { display: none; }
+@media (pointer: coarse) { .legend .tip-mouse { display: none; } .legend .tip-touch { display: inline; } }
 .road-key { width: 18px; height: 4px; border-radius: 2px; background: var(--road); }
 .route-key { width: 18px; height: 6px; border-radius: 3px; background: var(--accent); }
 
@@ -120,27 +128,34 @@ select, .ghost { background: var(--panel); border: 1px solid var(--line); border
 .status.error { color: var(--warn); font-weight: 500; }
 .status button { background: none; border: 1px solid var(--line); border-radius: 6px; padding: 2px 10px; cursor: pointer; }
 
-#plans { display: flex; flex-direction: column; gap: 8px; }
-.plan { display: flex; flex-direction: column; gap: 6px; width: 100%; text-align: left; padding: 14px 16px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; cursor: pointer; }
-.plan:hover { background: var(--hover); }
-.plan[aria-pressed="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
-.plan-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
-.plan-name { font-family: var(--display); font-size: 1.15rem; }
-.plan-desc { font-size: 13px; color: var(--muted); }
-.badge { font-size: 10.5px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; white-space: nowrap; }
-.plan[aria-pressed="true"] .badge { color: var(--accent); border-color: var(--accent); }
-.big { font: 500 2rem/1.1 var(--mono); font-variant-numeric: tabular-nums; display: flex; align-items: baseline; gap: 8px; }
-.big .unit { font: 400 13px var(--body); color: var(--muted); }
-.big.muted { color: var(--muted); }
-.stats { display: flex; flex-wrap: wrap; gap: 2px 14px; font-size: 13px; color: var(--muted); }
-.stats b { font: 500 13px var(--mono); color: var(--ink); font-variant-numeric: tabular-nums; }
-.note { font-size: 12.5px; color: var(--muted); font-style: italic; }
-
-.balance { display: flex; flex-direction: column; gap: 6px; padding: 12px 16px; border: 1px dashed var(--line); border-radius: 10px; }
-.balance label { font-size: 13.5px; }
-.balance output { font: 600 14px var(--mono); color: var(--accent); }
-.balance input { width: 100%; accent-color: var(--accent); }
-.scale { display: flex; justify-content: space-between; font-size: 11.5px; color: var(--muted); letter-spacing: 0.03em; }
+/* Plan bar: fixed slots, so switching plans never reflows it.
+   [picker] [tiles] [travel] [longest] [upkeep] [badge or shortcut stepper] / [note] */
+.planbar { display: grid; grid-template-columns: 16rem 6.5rem 10rem 6.5rem 7rem minmax(11rem, 1fr); grid-template-areas: "pick tiles travel max upkeep extra" "note note note note note note"; gap: 10px 20px; align-items: end; padding: 12px 16px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
+.plan-pick { grid-area: pick; }
+.st-tiles { grid-area: tiles; } .st-travel { grid-area: travel; } .st-max { grid-area: max; } .st-upkeep { grid-area: upkeep; }
+.plan-pick, .stat { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.stat-label { font-size: 11px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
+.plan-pick select { width: 100%; height: 36px; font-weight: 500; border-color: var(--accent); }
+.stat-value { font: 500 1.4rem/36px var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.stat-value small { font: 400 12px var(--body); color: var(--muted); margin-left: 4px; }
+.plan-extra { grid-area: extra; justify-self: end; display: flex; flex-direction: column; align-items: flex-end; justify-content: flex-end; gap: 4px; min-height: 55px; }
+.badge { font-size: 10.5px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: var(--accent); border: 1px solid var(--accent); border-radius: 999px; padding: 2px 10px; white-space: nowrap; margin-bottom: 8px; }
+.step-row { display: flex; align-items: center; gap: 4px; height: 36px; }
+.step-row button { display: grid; place-items: center; width: 32px; height: 32px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); cursor: pointer; }
+.step-row button:hover:not(:disabled) { background: var(--hover); }
+.step-row button:disabled { opacity: 0.35; cursor: default; }
+.step-row svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.step-row output { min-width: 3.2ch; text-align: center; font: 600 1.25rem var(--mono); color: var(--accent); font-variant-numeric: tabular-nums; }
+.plan-note { grid-area: note; margin: 0; font-size: 13px; line-height: 1.5; color: var(--muted); min-height: 1.5em; }
+@media (max-width: 1100px) {
+  .planbar { grid-template-columns: repeat(4, minmax(0, 1fr)); grid-template-areas: "pick pick pick extra" "tiles travel max upkeep" "note note note note"; }
+  .plan-note { min-height: 3em; }
+}
+@media (max-width: 560px) {
+  .planbar { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-areas: "pick pick" "tiles travel" "max upkeep" "extra extra" "note note"; padding: 12px; }
+  .plan-extra { justify-self: start; align-items: flex-start; min-height: 0; height: 55px; }
+  .plan-note { min-height: 4.5em; }
+}
 
 .section { display: flex; flex-direction: column; gap: 8px; }
 .hint { margin: 0; font-size: 13px; color: var(--muted); }
@@ -162,30 +177,20 @@ details.method { font-size: 13.5px; color: var(--muted); border-top: 1px solid v
 details.method summary { cursor: pointer; color: var(--ink); font-weight: 500; }
 details.method p { margin: 8px 0 0; max-width: 65ch; }
 
-/* Tablet: map on top, plans side by side under it. */
-@media (max-width: 980px) {
-  #plans { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
-}
-
-/* Phone: tappable hexes in a scrolling frame, a full-width brush bar,
-   and plan cards in a swipeable row. */
+/* Phone: tappable hexes in a scrolling frame and a full-width brush bar. */
 @media (max-width: 720px) {
   body { padding-block: 16px 32px; }
   h1 { font-size: 1.6rem; }
   header p { font-size: 14px; }
-  .brushes { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); width: 100%; }
+  .brushes { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); width: 100%; }
   .brush { flex-direction: column; justify-content: center; gap: 4px; padding: 8px 2px; font-size: 12.5px; }
   .brush kbd { display: none; }
   .tools { width: 100%; }
   .tools select { flex: 1; min-width: 0; }
   .map { padding: 6px; }
   #svg { min-width: calc(var(--cols, 22) * 30px); }
-  .legend .tip-touch { display: inline; }
-}
-@media (max-width: 640px) {
-  #plans { display: flex; flex-direction: row; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 6px; margin-right: calc(-1 * max(16px, env(safe-area-inset-right, 0px))); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
-  .plan { flex: 0 0 82%; scroll-snap-align: start; }
-  .big { font-size: 1.7rem; }
+  .plan-pick { flex: 1 1 100%; }
+  .plan-pick select { flex: 1; }
 }
 
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
@@ -197,15 +202,14 @@ details.method p { margin: 8px 0 0; max-width: 65ch; }
     <p>Paint your terrain, drop in your cities, and compare three road networks: the fewest road tiles, the shortest trips between cities, and a balance of the two.</p>
   </header>
 
-  <div class="layout">
-    <section class="map-col" aria-label="Map">
+  <section class="workspace" aria-label="Map">
       <div class="toolbar">
         <div class="brushes" role="group" aria-label="Paint brush">
           <button class="brush" id="brush-1" data-t="1" aria-pressed="true"><span class="sw sw-city"></span>City<kbd>1</kbd></button>
           <button class="brush" id="brush-2" data-t="2" aria-pressed="false"><span class="sw sw-mount"></span>Mountain<kbd>2</kbd></button>
           <button class="brush" id="brush-3" data-t="3" aria-pressed="false"><span class="sw sw-water"></span>Water<kbd>3</kbd></button>
           <button class="brush" id="brush-0" data-t="0" aria-pressed="false"><span class="sw sw-land"></span>Land<kbd>4</kbd></button>
-          <button class="brush" id="brush-move" data-t="-1" aria-pressed="false"><svg class="move-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.5v13M1.5 8h13M8 1.5 6 3.5M8 1.5l2 2M8 14.5l-2-2M8 14.5l2-2M1.5 8l2-2M1.5 8l2 2M14.5 8l-2-2M14.5 8l-2 2"></path></svg>Move<kbd>5</kbd></button>
+          <button class="brush" id="brush-move" data-t="-1" aria-pressed="false" hidden><svg class="move-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.5v13M1.5 8h13M8 1.5 6 3.5M8 1.5l2 2M8 14.5l-2-2M8 14.5l2-2M1.5 8l2-2M1.5 8l2 2M14.5 8l-2-2M14.5 8l-2 2"></path></svg>Move</button>
         </div>
         <div class="tools">
           <label for="size">Map</label>
@@ -213,10 +217,46 @@ details.method p { margin: 8px 0 0; max-width: 65ch; }
             <option value="small">Small · 16 × 11</option>
             <option value="standard">Standard · 22 × 14</option>
             <option value="large">Large · 28 × 18</option>
+            <option value="custom">Custom size…</option>
           </select>
+          <span class="custom-size" id="customSize" hidden>
+            <input type="number" id="cols" min="4" max="50" inputmode="numeric" aria-label="Columns">×
+            <input type="number" id="rows" min="4" max="50" inputmode="numeric" aria-label="Rows">
+            <button class="ghost" id="applySize">Apply</button>
+          </span>
+          <div class="shift" role="group" aria-label="Shift map">
+            <span>Shift</span>
+            <button id="shift-left" data-dir="left" aria-label="Shift map left"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M9 2.5 4.5 7 9 11.5"></path></svg></button>
+            <button id="shift-up" data-dir="up" aria-label="Shift map up"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M2.5 9 7 4.5 11.5 9"></path></svg></button>
+            <button id="shift-down" data-dir="down" aria-label="Shift map down"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M2.5 5 7 9.5 11.5 5"></path></svg></button>
+            <button id="shift-right" data-dir="right" aria-label="Shift map right"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M5 2.5 9.5 7 5 11.5"></path></svg></button>
+          </div>
           <button class="ghost" id="example">Load example</button>
           <button class="ghost" id="clear">Clear map</button>
         </div>
+      </div>
+
+      <div class="planbar">
+        <div class="plan-pick">
+          <label class="stat-label" for="plan">Road plan</label>
+          <select id="plan"></select>
+        </div>
+        <div class="stat st-tiles"><span class="stat-label">Road tiles</span><span class="stat-value" id="stTiles">—</span></div>
+        <div class="stat st-travel"><span class="stat-label">Total travel</span><span class="stat-value" id="stTravel">—</span></div>
+        <div class="stat st-max"><span class="stat-label">Longest trip</span><span class="stat-value" id="stMax">—</span></div>
+        <div class="stat st-upkeep"><span class="stat-label">Upkeep / turn</span><span class="stat-value" id="stUpkeep">—</span></div>
+        <div class="plan-extra">
+          <span class="badge" id="exactBadge" hidden></span>
+          <div id="stepper" role="group" aria-labelledby="stepLabel" hidden>
+            <span class="stat-label" id="stepLabel">Shortcut value</span>
+            <div class="step-row">
+              <button id="thrDown" aria-label="Lower shortcut value"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M9 2.5 4.5 7 9 11.5"></path></svg></button>
+              <output id="thrOut" aria-live="polite">2</output>
+              <button id="thrUp" aria-label="Raise shortcut value"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M5 2.5 9.5 7 5 11.5"></path></svg></button>
+            </div>
+          </div>
+        </div>
+        <p class="plan-note" id="planNote"></p>
       </div>
 
       <div class="map"><svg id="svg" role="img" aria-label="Hex map. Click or drag to paint tiles."></svg></div>
@@ -228,21 +268,12 @@ details.method p { margin: 8px 0 0; max-width: 65ch; }
         <span><i class="sw sw-water"></i>Water</span>
         <span><i class="sw sw-city"></i>City</span>
         <span><i class="route-key"></i>Selected route</span>
-        <span class="tip">Click or drag to paint. Paint a tile with the brush it already has to turn it back into land. <span class="tip-touch">Pick Move to scroll the map without painting.</span></span>
+        <span class="tip"><span class="tip-mouse">Click or drag to paint.</span><span class="tip-touch">Tap or drag sideways to paint. Swipe up or down to scroll the page. <span id="tipMove" hidden>Pick Move to scroll the map sideways.</span></span> Paint a tile with the brush it already has to turn it back into land. Shift moves everything on the map one tile; cities never fall off the edge. Arrow keys shift too.</span>
       </div>
       <p class="status" id="status" role="status"></p>
-    </section>
+  </section>
 
-    <aside class="rail" aria-label="Results">
-      <h2>Road plans</h2>
-      <div id="plans" role="group" aria-label="Road plan"></div>
-
-      <div class="balance">
-        <label for="thr">Balanced plan: add a shortcut when each new road tile saves at least <output id="thrOut" for="thr">2</output> tiles of travel</label>
-        <input type="range" id="thr" min="0.5" max="8" step="0.5" value="2">
-        <div class="scale"><span>More shortcuts</span><span>Fewer roads</span></div>
-      </div>
-
+  <div class="below">
       <div class="section">
         <h2>Travel between cities</h2>
         <p class="hint">Tiles moved along the selected plan's roads. <span class="extra">+n</span> means the trip is n tiles longer than the shortest land route. Pick a cell to trace that route.</p>
@@ -253,12 +284,11 @@ details.method p { margin: 8px 0 0; max-width: 65ch; }
       <details class="method">
         <summary>How the plans are worked out</summary>
         <p>Roads can go on any land tile. Mountains and water block them. City tiles already count as roads, so passing through a city costs nothing.</p>
-        <p><b>Fewest roads</b> is a minimum Steiner tree. For up to 12 cities it is solved exactly (Dreyfus–Wagner), so no smaller network exists. With more cities it uses a fast approximation.</p>
+        <p><b>Fewest roads</b> is a minimum Steiner tree, solved exactly (Dreyfus–Wagner) so no smaller network exists. Exact solving works for up to 12 cities on maps up to Large size, and fewer on bigger maps. Past that limit it uses a fast approximation.</p>
         <p><b>Fastest travel</b> gives every pair of cities its shortest land route, overlapping routes wherever it can, then removes any tile that doesn't shorten a trip.</p>
         <p><b>Balanced</b> starts from the fewest-roads network and adds the shortcut with the best travel saved per new tile, again and again, until no shortcut beats the slider. A shortcut only counts if it makes at least one trip 2 or more tiles shorter. Shortcuts that save a single tile are never built.</p>
         <p>Total travel adds up the trip length for every pair of cities. Upkeep assumes 1 gold per road tile per turn.</p>
       </details>
-    </aside>
   </div>
 </div>
 
@@ -267,8 +297,14 @@ details.method p { margin: 8px 0 0; max-width: 65ch; }
 "use strict";
 
 // ALGO START
-const LAND = 0, CITY = 1, MOUNT = 2, WATER = 3, MOVE = -1;
+// The solver is self-contained so the page can also run it in a Web Worker
+// (see startWorker), keeping painting and shifting responsive.
+function algoModule() {
+"use strict";
+const LAND = 0, CITY = 1, MOUNT = 2, WATER = 3;
 const EXACT_LIMIT = 12;
+// The exact solver keeps 2^cities × tiles table entries; past this it uses the approximation.
+const EXACT_BUDGET = 2.6e6;
 
 // Odd rows are shifted right (pointy-top "odd-r" layout).
 function neighborCells(c, r, cols, rows) {
@@ -660,7 +696,8 @@ function solve(cols, rows, cells, cityCells, thr) {
   for (let j = 1; j < k; j++) if (ideal[0][j] < 0) return { ok: false, unreachable: [0, j] };
   for (let i = 0; i < k; i++) for (let j = i + 1; j < k; j++) idealSum += ideal[i][j];
 
-  const exact = k <= EXACT_LIMIT;
+  const exactLimit = Math.min(EXACT_LIMIT, Math.floor(Math.log2(EXACT_BUDGET / G.n)));
+  const exact = k <= exactLimit;
   const fewestNet = improveLayout(G, terms, exact ? steinerExact(G, terms) : steinerHeuristic(G, terms));
   const fastestNet = buildFastest(G, terms, ideal, idealSum, fewestNet);
   const balancedNet = buildBalanced(G, terms, ideal, fewestNet, thr);
@@ -671,18 +708,23 @@ function solve(cols, rows, cells, cityCells, thr) {
   if (fewest.sum <= fastest.sum && fewest.tiles <= fastest.tiles) fastest = { ...fewest };
   if (balanced.tiles >= fastest.tiles && balanced.sum >= fastest.sum) balanced = { ...fastest };
   const same = (a, b) => a.tiles === b.tiles && a.sum === b.sum;
-  if (same(balanced, fewest)) balanced.note = "Same as fewest roads. No shortcut saves enough travel at this setting.";
-  else if (same(balanced, fastest)) balanced.note = "Same as fastest travel at this setting.";
-  if (same(fastest, fewest)) fastest.note = "The fewest-roads network already gives every trip its shortest route.";
-  return { ok: true, G, terms, ideal, idealSum, exact, fewest, balanced, fastest };
+  if (same(balanced, fewest)) balanced.note = "Same as fewest roads at this value.";
+  else if (same(balanced, fastest)) balanced.note = "Same as fastest travel at this value.";
+  if (same(fastest, fewest)) fastest.note = "Same as fewest roads.";
+  return { ok: true, G, terms, ideal, idealSum, exact, exactLimit, fewest, balanced, fastest };
+}
+return { solve, bfsPath, buildGraph, steinerExact, improveLayout, evalNet, countTiles, LAND, CITY, MOUNT, WATER };
 }
 // ALGO END
 
-if (typeof document === "undefined") { globalThis.__algo = { solve, LAND, CITY, MOUNT, WATER }; return; }
+const { solve, bfsPath, LAND, CITY, MOUNT, WATER } = algoModule();
+if (typeof document === "undefined") { globalThis.__algo = algoModule(); return; }
 
 // ---- Page ----
+const MOVE = -1;
 const SQ3 = Math.sqrt(3), R = 20;
 const SIZES = { small: [16, 11], standard: [22, 14], large: [28, 18] };
+const MIN_SIZE = 4, MAX_SIZE = 50;
 const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 const KEY = "civ5-road-planner-v1";
 const PLAN_INFO = {
@@ -695,7 +737,7 @@ const $ = s => document.querySelector(s);
 const svg = $("#svg");
 
 let S = load() || sample();
-let brush = CITY, plans = null, route = null, painting = false, paintType = LAND, timer = 0, undoSnap = null;
+let brush = CITY, plans = null, route = null, painting = false, strokeChanged = false, paintType = LAND, undoSnap = null;
 
 function blank(cols, rows) {
   return { cols, rows, cells: new Array(cols * rows).fill(LAND), labels: {}, thr: 2, selected: "balanced" };
@@ -720,7 +762,8 @@ function sample() {
 function load() {
   try {
     const o = JSON.parse(localStorage.getItem(KEY));
-    if (!o || !Object.values(SIZES).some(([c, r]) => c === o.cols && r === o.rows)) return null;
+    const okSize = x => Number.isInteger(x) && x >= MIN_SIZE && x <= MAX_SIZE;
+    if (!o || !okSize(o.cols) || !okSize(o.rows)) return null;
     if (!Array.isArray(o.cells) || o.cells.length !== o.cols * o.rows) return null;
     const s = { ...blank(o.cols, o.rows), cells: o.cells.map(v => (v >= 0 && v <= 3 ? v : LAND)), thr: +o.thr || 2, selected: PLAN_INFO[o.selected] ? o.selected : "balanced" };
     const used = new Set();
@@ -753,7 +796,9 @@ function hexPoints(x, y) {
   return pts.join(" ");
 }
 
-let tilesEls = [];
+const NS = "http://www.w3.org/2000/svg";
+let tileEls = [], markEls = [], roadFlags = new Uint8Array(0);
+
 function buildSvg() {
   const { cols, rows } = S;
   const minX = -R * SQ3 / 2 - 3, minY = -R - 3;
@@ -762,8 +807,15 @@ function buildSvg() {
   let t = "";
   for (let i = 0; i < cols * rows; i++) { const [x, y] = center(i); t += `<polygon class="tile" points="${hexPoints(x, y)}"></polygon>`; }
   svg.innerHTML = `<g id="gT">${t}</g><g id="gR" class="layer"></g><g id="gRt" class="layer"></g><g id="gM" class="layer"></g>`;
-  tilesEls = [...svg.querySelectorAll(".tile")];
-  $("#size").value = Object.keys(SIZES).find(k => SIZES[k][0] === cols) || "standard";
+  tileEls = [...svg.querySelectorAll(".tile")];
+  roadFlags = new Uint8Array(cols * rows);
+  drawTerrain();
+  const preset = Object.keys(SIZES).find(k => SIZES[k][0] === cols && SIZES[k][1] === rows);
+  $("#size").value = preset || "custom";
+  $("#customSize").hidden = !!preset;
+  $("#cols").value = cols;
+  $("#rows").value = rows;
+  updateMoveTool();
 }
 
 function hexAt(e) {
@@ -781,60 +833,101 @@ function hexAt(e) {
 
 function current() { return plans && plans.ok ? plans[S.selected] : null; }
 
-function renderMap() {
-  const p = current(), G = plans && plans.ok ? plans.G : null;
-  const roadCell = new Uint8Array(S.cells.length);
-  let roads = "";
-  if (p) {
-    for (let v = 0; v < G.n; v++) {
-      if (!p.inNet[v]) continue;
-      if (G.w[v]) roadCell[G.cellOf[v]] = 1;
-      const [x1, y1] = center(G.cellOf[v]);
-      for (const u of G.adj[v]) {
-        if (u < v || !p.inNet[u]) continue;
-        const [x2, y2] = center(G.cellOf[u]);
-        roads += `<line class="road" x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}"></line>`;
-      }
-    }
-  }
-  tilesEls.forEach((el, i) => el.setAttribute("class", `tile t-${S.cells[i]}${roadCell[i] ? " is-road" : ""}`));
-  $("#gR").innerHTML = roads;
+function tileClass(i) { return `tile t-${S.cells[i]}${roadFlags[i] ? " is-road" : ""}`; }
 
-  let rt = "";
-  if (p && route) {
-    const path = bfsPath(G, p.inNet, plans.terms[route[0]], plans.terms[route[1]]);
-    rt = `<polyline class="route" points="${path.map(v => center(G.cellOf[v]).map(n => n.toFixed(1)).join(",")).join(" ")}"></polyline>`;
-  }
-  $("#gRt").innerHTML = rt;
-
-  let m = "";
-  S.cells.forEach((t, i) => {
-    const [x, y] = center(i);
-    if (t === MOUNT) m += `<path class="mglyph" d="M${x - 8},${y + 6}L${x - 2},${y - 6}L${x + 1},${y - 1}L${x + 4},${y - 5}L${x + 9},${y + 6}Z"></path>`;
-    else if (t === WATER) m += `<path class="wglyph" d="M${x - 7},${y - 2}q3.5,-3 7,0t7,0M${x - 7},${y + 4}q3.5,-3 7,0t7,0"></path>`;
-    else if (t === CITY) m += `<circle class="city-dot" cx="${x}" cy="${y}" r="10.5"></circle><text class="city-label" x="${x}" y="${y + 0.5}">${S.labels[i]}</text>`;
-  });
-  $("#gM").innerHTML = m;
+function makeMark(i) {
+  const t = S.cells[i], [x, y] = center(i);
+  if (t === LAND) return null;
+  const g = document.createElementNS(NS, "g");
+  if (t === MOUNT) g.innerHTML = `<path class="mglyph" d="M${x - 8},${y + 6}L${x - 2},${y - 6}L${x + 1},${y - 1}L${x + 4},${y - 5}L${x + 9},${y + 6}Z"></path>`;
+  else if (t === WATER) g.innerHTML = `<path class="wglyph" d="M${x - 7},${y - 2}q3.5,-3 7,0t7,0M${x - 7},${y + 4}q3.5,-3 7,0t7,0"></path>`;
+  else g.innerHTML = `<circle class="city-dot" cx="${x}" cy="${y}" r="10.5"></circle><text class="city-label" x="${x}" y="${y + 0.5}">${S.labels[i]}</text>`;
+  return g;
 }
 
-// ---- Rail ----
+// Redraw one tile while painting, instead of the whole map.
+function drawCell(i) {
+  tileEls[i].setAttribute("class", tileClass(i));
+  if (markEls[i]) markEls[i].remove();
+  markEls[i] = makeMark(i);
+  if (markEls[i]) $("#gM").append(markEls[i]);
+}
+
+function drawTerrain() {
+  const frag = document.createDocumentFragment();
+  markEls = S.cells.map((t, i) => {
+    tileEls[i].setAttribute("class", tileClass(i));
+    const m = makeMark(i);
+    if (m) frag.append(m);
+    return m;
+  });
+  $("#gM").replaceChildren(frag);
+}
+
+// Where a plan tile sits now. After a shift the old plan stays on screen,
+// moved with the map, until the new one is ready.
+function planCell(v) {
+  const c = plans.G.cellOf[v];
+  return plans.remap ? plans.remap[c] : c;
+}
+
+function drawRoads() {
+  const p = current(), next = new Uint8Array(S.cells.length);
+  let lines = "", rt = "";
+  if (p) {
+    const G = plans.G;
+    for (let v = 0; v < G.n; v++) {
+      if (!p.inNet[v]) continue;
+      const cv = planCell(v);
+      if (cv < 0) continue;
+      if (G.w[v]) next[cv] = 1;
+      const [x1, y1] = center(cv);
+      for (const u of G.adj[v]) {
+        if (u < v || !p.inNet[u]) continue;
+        const cu = planCell(u);
+        if (cu < 0) continue;
+        const [x2, y2] = center(cu);
+        lines += `<line class="road" x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}"></line>`;
+      }
+    }
+    if (route) {
+      const pts = bfsPath(G, p.inNet, plans.terms[route[0]], plans.terms[route[1]]).map(planCell).filter(c => c >= 0);
+      rt = `<polyline class="route" points="${pts.map(c => center(c).map(n => n.toFixed(1)).join(",")).join(" ")}"></polyline>`;
+    }
+  }
+  for (let i = 0; i < next.length; i++) {
+    if (next[i] !== roadFlags[i]) { roadFlags[i] = next[i]; tileEls[i].setAttribute("class", tileClass(i)); }
+  }
+  $("#gR").innerHTML = lines;
+  $("#gRt").innerHTML = rt;
+  svg.classList.toggle("stale", !!(plans && plans.stale));
+}
+
+// ---- Plan bar and travel table ----
 function renderPlans() {
   const ok = plans && plans.ok;
-  $("#plans").innerHTML = Object.keys(PLAN_INFO).map(key => {
-    const info = PLAN_INFO[key], p = ok ? plans[key] : null;
-    const badge = key === "fewest" && ok ? `<span class="badge">${plans.exact ? "Proven minimum" : "Best found"}</span>` : "";
-    const body = p
-      ? `<div class="big">${p.tiles}<span class="unit">road tile${p.tiles === 1 ? "" : "s"}</span></div>
-         <div class="stats">
-           <span>Total travel <b>${p.sum}</b> (best possible <b>${plans.idealSum}</b>)</span>
-           <span>Longest trip <b>${p.max}</b></span>
-           <span>Upkeep <b>${p.tiles}</b> gold/turn</span>
-         </div>${p.note ? `<div class="note">${p.note}</div>` : ""}`
-      : `<div class="big muted">${plans === null ? "…" : "—"}</div>`;
-    return `<button class="plan" id="plan-${key}" data-k="${key}" aria-pressed="${S.selected === key}">
-      <div class="plan-head"><span class="plan-name">${info.name}</span>${badge}</div>
-      <div class="plan-desc">${info.desc}</div>${body}</button>`;
+  $("#plan").innerHTML = Object.keys(PLAN_INFO).map(key => {
+    const p = ok ? plans[key] : null;
+    return `<option value="${key}"${S.selected === key ? " selected" : ""}>${PLAN_INFO[key].name}${p ? ` · ${p.tiles} tiles` : ""}</option>`;
   }).join("");
+  const p = current(), key = S.selected;
+  $("#stTiles").textContent = p ? p.tiles : "—";
+  $("#stTravel").innerHTML = p ? `${p.sum}<small>best ${plans.idealSum}</small>` : "—";
+  $("#stMax").textContent = p ? p.max : "—";
+  $("#stUpkeep").innerHTML = p ? `${p.tiles}<small>gold</small>` : "—";
+  const badge = $("#exactBadge");
+  badge.hidden = !(key === "fewest" && ok);
+  if (ok) badge.textContent = plans.exact ? "Proven minimum" : "Best found";
+  $("#stepper").hidden = key !== "balanced";
+  $("#thrOut").textContent = S.thr;
+  $("#thrDown").disabled = S.thr <= THR_MIN;
+  $("#thrUp").disabled = S.thr >= THR_MAX;
+  const desc = key === "balanced"
+    ? `Adds shortcuts that cut a trip by 2+ tiles and save at least ${S.thr} tiles of travel per new road tile.`
+    : PLAN_INFO[key].desc;
+  $("#planNote").textContent = plans === null ? "Working out roads…"
+    : plans.stale ? "Updating roads…"
+    : desc + (p && p.note ? " " + p.note : "");
 }
 
 function renderMatrix() {
@@ -845,7 +938,7 @@ function renderMatrix() {
     info.textContent = "";
     return;
   }
-  const L = cityList().map(c => c.label), ideal = plans.ideal;
+  const L = plans.labels, ideal = plans.ideal;
   let h = `<table><thead><tr><th></th>${L.map(l => `<th scope="col">${l}</th>`).join("")}</tr></thead><tbody>`;
   L.forEach((li, i) => {
     h += `<tr><th scope="row">${li}</th>`;
@@ -873,38 +966,88 @@ function setStatus(msg, opts = {}) {
     b.id = "undo"; b.textContent = "Undo";
     b.addEventListener("click", () => {
       if (!undoSnap) return;
-      S = undoSnap; undoSnap = null;
-      buildSvg(); recompute(); setStatus("Map restored.");
+      S = undoSnap; undoSnap = null; plans = null; route = null;
+      buildSvg(); solveNow(); setStatus("Map restored.");
     });
     el.append(b);
   }
 }
 
-function render() { renderMap(); renderPlans(); renderMatrix(); }
+function render() { drawRoads(); renderPlans(); renderMatrix(); }
 
 // ---- Solve ----
-function compute() {
-  const cities = cityList();
-  if (cities.length < 2) {
-    plans = { ok: false };
-    setStatus(cities.length ? "Place at least one more city to plan roads." : "Pick the City brush and click the map to place your cities.");
-    return;
-  }
-  const res = solve(S.cols, S.rows, S.cells, cities.map(c => c.i), S.thr);
-  plans = res;
-  if (!res.ok) {
-    const [a, b] = res.unreachable;
-    setStatus(`City ${cities[b].label} can't reach city ${cities[a].label} over land. Clear a path through the water or mountains.`, { error: true });
-  } else if (!res.exact) {
-    setStatus(`With ${cities.length} cities the fewest-roads plan is a close approximation. Up to ${EXACT_LIMIT} cities it is exact.`);
-  } else if (!undoSnap) setStatus("");
+// Solving runs in a background worker so the page never freezes. Edits mark
+// the current plan stale and schedule one solve once they settle; a newer
+// request cancels a solve that is still running.
+const WORKER_SRC = `const A = (${algoModule.toString()})();
+self.onmessage = e => {
+  let res;
+  try { res = A.solve(...e.data.args); } catch (err) { res = { ok: false, error: String(err) }; }
+  self.postMessage({ id: e.data.id, res });
+};`;
+let worker = null, workerUrl = null, noWorker = false, busy = false, pending = null, jobId = 0, timer = 0;
+
+function startWorker() {
+  try {
+    workerUrl = workerUrl || URL.createObjectURL(new Blob([WORKER_SRC], { type: "text/javascript" }));
+    worker = new Worker(workerUrl);
+    worker.onmessage = e => { busy = false; accept(e.data.id, e.data.res); };
+    worker.onerror = e => {
+      // Workers unavailable here: fall back to solving on the page.
+      e.preventDefault();
+      worker.terminate(); worker = null; noWorker = true; busy = false;
+      if (pending) solveOnPage(pending.id, pending.args);
+    };
+  } catch (err) { worker = null; noWorker = true; }
 }
 
-function recompute() {
+function solveOnPage(id, args) {
+  setTimeout(() => { if (pending && pending.id === id) accept(id, solve(...args)); }, 0);
+}
+
+function solveNow() {
   clearTimeout(timer);
-  if (cityList().length <= 8) { compute(); render(); save(); return; }
-  plans = null; render();
-  timer = setTimeout(() => { compute(); render(); save(); }, 160);
+  const cities = cityList();
+  if (cities.length < 2) {
+    pending = null;
+    plans = { ok: false };
+    setStatus(cities.length ? "Place at least one more city to plan roads." : "Pick the City brush and click the map to place your cities.");
+    render(); save();
+    return;
+  }
+  const id = ++jobId, args = [S.cols, S.rows, S.cells.slice(), cities.map(c => c.i), S.thr];
+  pending = { id, args, labels: cities.map(c => c.label) };
+  if (!worker && !noWorker) startWorker();
+  if (worker) {
+    if (busy) { worker.terminate(); startWorker(); }
+    busy = true;
+    worker.postMessage({ id, args });
+  } else solveOnPage(id, args);
+  render();
+}
+
+function scheduleSolve(delay) {
+  pending = null;
+  if (plans) plans.stale = true;
+  clearTimeout(timer);
+  timer = setTimeout(solveNow, delay);
+  render();
+}
+
+function accept(id, res) {
+  if (!pending || pending.id !== id) return;
+  const labels = pending.labels;
+  pending = null;
+  plans = res;
+  plans.labels = labels;
+  if (res.error) setStatus(`Couldn't work out roads: ${res.error}`, { error: true });
+  else if (!res.ok && res.unreachable) {
+    const [a, b] = res.unreachable;
+    setStatus(`City ${labels[b]} can't reach city ${labels[a]} over land. Clear a path through the water or mountains.`, { error: true });
+  } else if (!res.exact) {
+    setStatus(`With ${labels.length} cities on a map this size, the fewest-roads plan is a close approximation. It is exact for up to ${res.exactLimit} cities here.`);
+  } else if (!undoSnap) setStatus("");
+  render(); save();
 }
 
 function setCell(i, t) {
@@ -920,51 +1063,131 @@ function setCell(i, t) {
   return true;
 }
 
+// While painting, redraw only the touched tile. Roads are solved once the stroke ends.
 function edit(i) {
   if (!setCell(i, paintType)) return;
   undoSnap = null;
-  route = null;
-  recompute();
+  drawCell(i);
+  clearTimeout(timer);
+  pending = null;
+  strokeChanged = true;
+  if (plans && !plans.stale) { plans.stale = true; route = null; render(); }
 }
 
 // ---- Events ----
+// Mouse and pen paint by click or drag. On touch the map allows vertical
+// panning only (touch-action: pan-y), so a vertical swipe scrolls the page and
+// the browser cancels it; a tap or a sideways drag reaches us and paints.
+// With Move picked, touch pans the map instead and nothing paints.
+let touch = null;
 svg.addEventListener("pointerdown", e => {
   if (e.button !== 0 || brush === MOVE) return;
   const i = hexAt(e);
   if (i < 0) return;
+  paintType = S.cells[i] === brush && brush !== LAND ? LAND : brush;
+  if (e.pointerType === "touch") { touch = { i, x: e.clientX, y: e.clientY }; return; }
   e.preventDefault();
   painting = true;
-  paintType = S.cells[i] === brush && brush !== LAND ? LAND : brush;
   svg.setPointerCapture(e.pointerId);
   edit(i);
 });
 svg.addEventListener("pointermove", e => {
+  if (touch && !painting) {
+    if (Math.hypot(e.clientX - touch.x, e.clientY - touch.y) < 8) return;
+    painting = true;
+    edit(touch.i);
+  }
   if (!painting) return;
   const i = hexAt(e);
   if (i >= 0) edit(i);
 });
-const endPaint = () => { painting = false; };
-svg.addEventListener("pointerup", endPaint);
-svg.addEventListener("pointercancel", endPaint);
+const endPaint = () => {
+  if (!painting) return;
+  painting = false;
+  if (strokeChanged) { strokeChanged = false; scheduleSolve(60); }
+};
+svg.addEventListener("pointerup", () => {
+  if (touch && !painting) { painting = true; edit(touch.i); }
+  touch = null;
+  endPaint();
+});
+svg.addEventListener("pointercancel", () => { touch = null; endPaint(); });
 
 function setBrush(t) {
   brush = t;
   document.querySelectorAll(".brush").forEach(b => b.setAttribute("aria-pressed", String(+b.dataset.t === t)));
   svg.classList.toggle("panning", t === MOVE);
 }
+
+// Move only appears on touch screens when the map is wider than its frame.
+const coarse = matchMedia("(pointer: coarse)");
+function updateMoveTool() {
+  const frame = $(".map");
+  const need = coarse.matches && frame.scrollWidth > frame.clientWidth + 1;
+  $("#brush-move").hidden = !need;
+  $("#tipMove").hidden = !need;
+  if (!need && brush === MOVE) setBrush(CITY);
+}
+window.addEventListener("resize", updateMoveTool);
+coarse.addEventListener("change", updateMoveTool);
 document.querySelectorAll(".brush").forEach(b => b.addEventListener("click", () => setBrush(+b.dataset.t)));
 document.addEventListener("keydown", e => {
   if (e.metaKey || e.ctrlKey || e.altKey || /INPUT|SELECT|TEXTAREA/.test(e.target.tagName)) return;
-  const map = { "1": CITY, "2": MOUNT, "3": WATER, "4": LAND, "5": MOVE };
+  const map = { "1": CITY, "2": MOUNT, "3": WATER, "4": LAND };
+  const arrows = { ArrowLeft: "left", ArrowRight: "right", ArrowUp: "up", ArrowDown: "down" };
   if (e.key in map) setBrush(map[e.key]);
+  else if (e.key in arrows) { e.preventDefault(); shiftMap(arrows[e.key]); }
 });
 
-$("#plans").addEventListener("click", e => {
-  const b = e.target.closest(".plan");
-  if (!b) return;
-  S.selected = b.dataset.k;
+$("#plan").addEventListener("change", e => {
+  S.selected = e.target.value;
   save(); render();
 });
+
+// Moving one row on a hex grid also moves half a tile sideways, so vertical
+// shifts alternate between the two diagonals; two presses go straight.
+let zig = false;
+function shiftMap(dir) {
+  let dq = 0, dr = 0;
+  if (dir === "left") dq = -1;
+  else if (dir === "right") dq = 1;
+  else {
+    zig = !zig;
+    dr = dir === "down" ? 1 : -1;
+    dq = dir === "down" ? (zig ? 0 : -1) : (zig ? 1 : 0);
+  }
+  const { cols, rows } = S, cells = new Array(cols * rows).fill(LAND), labels = {};
+  const moved = new Int32Array(cols * rows).fill(-1);
+  let dropped = 0;
+  for (let i = 0; i < cells.length; i++) {
+    const t = S.cells[i];
+    const c = i % cols, r = Math.floor(i / cols);
+    const q = c - (r - (r & 1)) / 2 + dq, r2 = r + dr, c2 = q + (r2 - (r2 & 1)) / 2;
+    if (r2 < 0 || r2 >= rows || c2 < 0 || c2 >= cols) {
+      if (t === CITY) {
+        if (dr) zig = !zig;
+        setStatus(`Can't shift ${dir}: city ${S.labels[i]} is on the edge.`, { error: true });
+        return;
+      }
+      if (t !== LAND) dropped++;
+      continue;
+    }
+    const j = r2 * cols + c2;
+    moved[i] = j;
+    cells[j] = t;
+    if (t === CITY) labels[j] = S.labels[i];
+  }
+  undoSnap = dropped ? JSON.parse(JSON.stringify(S)) : null;
+  S.cells = cells; S.labels = labels;
+  if (plans && plans.ok) {
+    const base = plans.remap || Int32Array.from(moved, (_, i) => i);
+    plans.remap = base.map(c => (c >= 0 ? moved[c] : -1));
+  }
+  drawTerrain();
+  scheduleSolve(400);
+  if (dropped) setStatus(`Shifted ${dir}. ${dropped} terrain tile${dropped === 1 ? "" : "s"} moved off the edge.`, { undo: true });
+}
+document.querySelectorAll(".shift button").forEach(b => b.addEventListener("click", () => shiftMap(b.dataset.dir)));
 
 $("#matrix").addEventListener("click", e => {
   const b = e.target.closest("button[data-i]");
@@ -972,49 +1195,79 @@ $("#matrix").addEventListener("click", e => {
   const i = +b.dataset.i, j = +b.dataset.j;
   const same = route && ((route[0] === i && route[1] === j) || (route[0] === j && route[1] === i));
   route = same ? null : [i, j];
-  renderMap(); renderMatrix();
+  drawRoads(); renderMatrix();
 });
 
-const thr = $("#thr");
-thr.addEventListener("input", () => {
-  S.thr = +thr.value;
-  $("#thrOut").textContent = S.thr;
-  recompute();
-});
+const THR_MIN = 0.5, THR_MAX = 8, THR_STEP = 0.5;
+function stepThr(dir) {
+  const next = Math.min(THR_MAX, Math.max(THR_MIN, S.thr + dir * THR_STEP));
+  if (next === S.thr) return;
+  S.thr = next;
+  scheduleSolve(300);
+}
+$("#thrDown").addEventListener("click", () => stepThr(-1));
+$("#thrUp").addEventListener("click", () => stepThr(1));
+
+function resizeTo(c2, r2) {
+  if (c2 === S.cols && r2 === S.rows) { buildSvg(); return; }
+  const next = { ...blank(c2, r2), thr: S.thr, selected: S.selected };
+  let lost = 0;
+  S.cells.forEach((t, i) => {
+    const c = i % S.cols, r = Math.floor(i / S.cols);
+    if (c < c2 && r < r2) {
+      next.cells[r * c2 + c] = t;
+      if (t === CITY) next.labels[r * c2 + c] = S.labels[i];
+    } else if (t !== LAND) lost++;
+  });
+  undoSnap = lost ? JSON.parse(JSON.stringify(S)) : null;
+  S = next; route = null; plans = null;
+  buildSvg(); solveNow();
+  if (lost) setStatus(`Map is now ${c2} × ${r2}. ${lost} tile${lost === 1 ? "" : "s"} past the new edge were removed.`, { undo: true });
+}
 
 $("#size").addEventListener("change", e => {
-  const [c2, r2] = SIZES[e.target.value];
-  const next = { ...blank(c2, r2), thr: S.thr, selected: S.selected };
-  for (let r = 0; r < Math.min(S.rows, r2); r++) for (let c = 0; c < Math.min(S.cols, c2); c++) {
-    const from = r * S.cols + c, to = r * c2 + c;
-    next.cells[to] = S.cells[from];
-    if (S.labels[from]) next.labels[to] = S.labels[from];
+  if (e.target.value === "custom") {
+    $("#customSize").hidden = false;
+    $("#cols").focus();
+    return;
   }
-  S = next; route = null;
-  buildSvg(); recompute();
+  resizeTo(...SIZES[e.target.value]);
 });
+
+// Sizes are capped at 4 × 4 to 50 × 50; out-of-range entries snap to the nearest limit.
+function applyCustomSize() {
+  const rawC = $("#cols").value, rawR = $("#rows").value;
+  if (rawC === "" || rawR === "" || !Number.isFinite(+rawC) || !Number.isFinite(+rawR)) {
+    setStatus("Enter a number of columns and rows.", { error: true });
+    return;
+  }
+  const clamp = x => Math.min(MAX_SIZE, Math.max(MIN_SIZE, Math.round(x)));
+  const c = clamp(+rawC), r = clamp(+rawR);
+  resizeTo(c, r);
+  if ((c !== +rawC || r !== +rawR) && !undoSnap) setStatus(`Maps go from ${MIN_SIZE} × ${MIN_SIZE} up to ${MAX_SIZE} × ${MAX_SIZE}, so this one is ${c} × ${r}.`);
+}
+$("#applySize").addEventListener("click", applyCustomSize);
+["#cols", "#rows"].forEach(s => $(s).addEventListener("keydown", e => { if (e.key === "Enter") applyCustomSize(); }));
 
 $("#example").addEventListener("click", () => {
   undoSnap = JSON.parse(JSON.stringify(S));
   S = { ...sample(), thr: S.thr, selected: S.selected };
-  route = null;
-  buildSvg(); recompute();
+  route = null; plans = null;
+  buildSvg(); solveNow();
   setStatus("Example map loaded.", { undo: true });
 });
 
 $("#clear").addEventListener("click", () => {
   undoSnap = JSON.parse(JSON.stringify(S));
   S = { ...blank(S.cols, S.rows), thr: S.thr, selected: S.selected };
-  route = null;
-  buildSvg(); recompute();
+  route = null; plans = null;
+  buildSvg(); solveNow();
   setStatus("Map cleared.", { undo: true });
 });
 
 // ---- Start ----
-thr.value = S.thr;
-$("#thrOut").textContent = S.thr;
+S.thr = Math.min(THR_MAX, Math.max(THR_MIN, Math.round(S.thr / THR_STEP) * THR_STEP));
 buildSvg();
-compute();
-render();
+solveNow();
 })();
 </script>
